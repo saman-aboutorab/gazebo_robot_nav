@@ -2,7 +2,7 @@
 
 ## One-Time Setup
 ```bash
-cd ~/projects/Robotics/isaac_diff_drive_nav/ros2_ws
+cd ~/projects/Robotics/gazebo_robot_nav/ros2_ws
 colcon build --symlink-install
 ```
 
@@ -10,15 +10,15 @@ colcon build --symlink-install
 
 ### Terminal 1: Launch System
 ```bash
-cd ~/projects/Robotics/isaac_diff_drive_nav/ros2_ws
+cd ~/projects/Robotics/gazebo_robot_nav/ros2_ws
 source install/setup.bash
 export TURTLEBOT3_MODEL=waffle
-ros2 launch isaac_nav_bringup gazebo_slam.launch.py
+ros2 launch gazebo_nav_bringup gazebo_slam.launch.py
 ```
 
 ### Terminal 2: Control Robot
 ```bash
-cd ~/projects/Robotics/isaac_diff_drive_nav/ros2_ws
+cd ~/projects/Robotics/gazebo_robot_nav/ros2_ws
 source install/setup.bash
 export TURTLEBOT3_MODEL=waffle
 ros2 run turtlebot3_teleop teleop_keyboard
@@ -33,7 +33,7 @@ ros2 run turtlebot3_teleop teleop_keyboard
 
 ## Save Map
 ```bash
-cd ~/projects/Robotics/isaac_diff_drive_nav
+cd ~/projects/Robotics/gazebo_robot_nav
 source ros2_ws/install/setup.bash
 ros2 run nav2_map_server map_saver_cli -f my_map --use-sim-time
 ```

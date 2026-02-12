@@ -15,31 +15,17 @@ venv/
 tmp/
 cache/
 
-# Isaac/Omniverse common
-*.usd~
-*.usda~
-*.tmp
-omniverse_cache/
-_omniverse/
-
 # ROS / build artifacts
 build/
 install/
 log/
 
-# Isaac Sim / Omniverse generated assets
+# Isaac Sim / Omniverse generated assets (legacy)
 *.usd
 *.usda
 *.usdc
-
-# Omniverse / Isaac generated assets
-isaac/robots/Collected_nova_carter/
-*.usd
-*.usda
-*.usdc
-
-# Omniverse / Isaac generated assets
-isaac/robots/Collected_nova_carter/
-*.usd
-*.usda
-*.usdc
+*.usd~
+*.usda~
+*.tmp
+omniverse_cache/
+_omniverse/

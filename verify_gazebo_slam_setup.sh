@@ -91,14 +91,14 @@ else
     check_fail "nav2_map_server package not found"
 fi
 
-# Check 6: isaac_nav_bringup package
+# Check 6: gazebo_nav_bringup package
 echo ""
-echo "Checking isaac_nav_bringup package..."
-if ros2 pkg list | grep -q "isaac_nav_bringup"; then
-    check_pass "isaac_nav_bringup package found"
+echo "Checking gazebo_nav_bringup package..."
+if ros2 pkg list | grep -q "gazebo_nav_bringup"; then
+    check_pass "gazebo_nav_bringup package found"
 
     # Check if launch file exists
-    PKG_SHARE=$(ros2 pkg prefix isaac_nav_bringup)/share/isaac_nav_bringup
+    PKG_SHARE=$(ros2 pkg prefix gazebo_nav_bringup)/share/gazebo_nav_bringup
     if [ -f "$PKG_SHARE/launch/gazebo_slam.launch.py" ]; then
         check_pass "gazebo_slam.launch.py found"
     else
@@ -119,7 +119,7 @@ if ros2 pkg list | grep -q "isaac_nav_bringup"; then
         check_warn "slam_config.rviz not found (RViz will use defaults)"
     fi
 else
-    check_fail "isaac_nav_bringup package not found - did you build the workspace?"
+    check_fail "gazebo_nav_bringup package not found - did you build the workspace?"
 fi
 
 # Check 7: TURTLEBOT3_MODEL environment variable
@@ -161,7 +161,7 @@ fi
 # Check 10: Launch file syntax
 echo ""
 echo "Checking launch file syntax..."
-if ros2 launch isaac_nav_bringup gazebo_slam.launch.py --show-args &> /dev/null; then
+if ros2 launch gazebo_nav_bringup gazebo_slam.launch.py --show-args &> /dev/null; then
     check_pass "gazebo_slam.launch.py parses without errors"
 else
     check_fail "gazebo_slam.launch.py has syntax errors"
@@ -182,10 +182,10 @@ if [ $FAILED -eq 0 ]; then
     echo -e "${GREEN}✓ All critical checks passed!${NC}"
     echo ""
     echo "Ready to launch Gazebo SLAM:"
-    echo "  1. cd ~/projects/Robotics/isaac_diff_drive_nav/ros2_ws"
+    echo "  1. cd ~/projects/Robotics/gazebo_robot_nav/ros2_ws"
     echo "  2. source install/setup.bash"
     echo "  3. export TURTLEBOT3_MODEL=waffle"
-    echo "  4. ros2 launch isaac_nav_bringup gazebo_slam.launch.py"
+    echo "  4. ros2 launch gazebo_nav_bringup gazebo_slam.launch.py"
     echo ""
     exit 0
 else

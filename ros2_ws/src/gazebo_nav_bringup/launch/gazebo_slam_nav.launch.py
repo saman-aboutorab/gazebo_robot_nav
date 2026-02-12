@@ -19,18 +19,18 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
-    pkg_isaac_nav_bringup = get_package_share_directory('isaac_nav_bringup')
+    pkg_gazebo_nav_bringup = get_package_share_directory('gazebo_nav_bringup')
     pkg_turtlebot3_gazebo = get_package_share_directory('turtlebot3_gazebo')
     pkg_slam_toolbox = get_package_share_directory('slam_toolbox')
 
     slam_params_file = os.path.join(
-        pkg_isaac_nav_bringup, 'config', 'slam_params_turtlebot3.yaml'
+        pkg_gazebo_nav_bringup, 'config', 'slam_params_turtlebot3.yaml'
     )
     nav2_params_file = os.path.join(
-        pkg_isaac_nav_bringup, 'config', 'nav2_params.yaml'
+        pkg_gazebo_nav_bringup, 'config', 'nav2_params.yaml'
     )
     rviz_config = os.path.join(
-        pkg_isaac_nav_bringup, 'rviz', 'slam_config.rviz'
+        pkg_gazebo_nav_bringup, 'rviz', 'slam_config.rviz'
     )
 
     use_sim_time = LaunchConfiguration('use_sim_time', default='true')

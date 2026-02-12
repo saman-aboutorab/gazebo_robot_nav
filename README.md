@@ -1,107 +1,144 @@
-# Project Title (Isaac Sim + Python)
-Isaac Differential Drive Navigation
+# Autonomous Mobile Robot Navigation
 
-## Goal
-Built a physics-accurate mobile robot navigation system in NVIDIA Isaac Sim, implementing differential-drive kinematics, LiDAR-based obstacle avoidance, and PID wheel control with sensor noise modeling; validated behavior across randomized cluttered environments.
+SLAM, Nav2, and Vision-Based Navigation in Gazebo with ROS2 Jazzy
+
+## Overview
+
+This project implements a complete autonomous mobile robot navigation system using ROS2 Jazzy. The robot simultaneously builds a map of an unknown environment (SLAM) and navigates to user-defined goals (Nav2), all running in Gazebo simulation with a Turtlebot3 Waffle.
+
+**Current capabilities:**
+- Real-time SLAM mapping (SLAM Toolbox, online async mode)
+- Autonomous path planning and obstacle avoidance (Nav2 stack)
+- LiDAR-based reactive gap-following navigation
+- Single-command launch orchestrating 15+ ROS2 nodes
+
+**In progress:** Vision-based navigation with camera integration and object detection (see `feature/vision-nav` branch).
 
 ## Tech Stack
-- NVIDIA Isaac Sim
-- Python
-- ROS2
+
+- **Framework:** ROS2 Jazzy
+- **Simulator:** Gazebo Sim 8.x
+- **Robot:** Turtlebot3 Waffle
+- **SLAM:** SLAM Toolbox (Ceres solver, loop closure)
+- **Navigation:** Nav2 (BT Navigator, RegulatedPurePursuit controller, Navfn planner)
+- **Language:** Python 3
+
+## Quick Start
+
+### One-Time Setup
+```bash
+cd ~/projects/Robotics/gazebo_robot_nav/ros2_ws
+colcon build --symlink-install
+```
+
+### SLAM Only (map building + teleop)
+```bash
+# Terminal 1: Launch system
+cd ~/projects/Robotics/gazebo_robot_nav/ros2_ws
+source install/setup.bash
+export TURTLEBOT3_MODEL=waffle
+ros2 launch gazebo_nav_bringup gazebo_slam.launch.py
+
+# Terminal 2: Drive the robot
+cd ~/projects/Robotics/gazebo_robot_nav/ros2_ws
+source install/setup.bash
+export TURTLEBOT3_MODEL=waffle
+ros2 run turtlebot3_teleop teleop_keyboard
+```
+
+### SLAM + Autonomous Navigation
+```bash
+cd ~/projects/Robotics/gazebo_robot_nav/ros2_ws
+source install/setup.bash
+export TURTLEBOT3_MODEL=waffle
+ros2 launch gazebo_nav_bringup gazebo_slam_nav.launch.py
+# Use RViz "2D Nav Goal" to send the robot to a target pose
+```
+
+### Save Map
+```bash
+cd ~/projects/Robotics/gazebo_robot_nav
+source ros2_ws/install/setup.bash
+ros2 run nav2_map_server map_saver_cli -f my_map --use-sim-time
+```
 
 ## Project Structure
-isaac_diff_drive_nav/
-├── src/
-│   ├── main.py
-│   ├── nodes/
-│   │   └── nav_demo.py
-│   ├── robot/
-│   │   └── diff_drive.py
-│   ├── control/
-│   │   └── avoidance.py
-│   ├── sensors/
-│   │   └── lidar.py
-│   └── utils/
-│       └── config.py
+
+```
+gazebo_robot_nav/
+├── ros2_ws/
+│   ├── src/gazebo_nav_bringup/          # Main bringup package
+│   │   ├── launch/
+│   │   │   ├── gazebo_slam.launch.py    # SLAM only
+│   │   │   └── gazebo_slam_nav.launch.py # SLAM + Nav2
+│   │   ├── config/
+│   │   │   ├── slam_params_turtlebot3.yaml
+│   │   │   └── nav2_params.yaml
+│   │   └── rviz/
+│   │       └── slam_config.rviz
+│   │
+│   └── reactive_nav/                    # Reactive navigation package
+│       └── reactive_nav/
+│           ├── gap_follower.py          # 3-sector gap-following avoidance
+│           └── scan_sanitizer.py        # LiDAR data preprocessing
 │
-├── isaac/
-│   ├── worlds/
-│   │   └── simple_obstacles.usd
-│   ├── robots/
-│   │   └── diff_bot.usd
-│   └── configs/
-│       └── nav.yaml
-│
-├── README.md
-└── requirements.txt
+├── src/                                 # Legacy Isaac Sim scripts (reference)
+├── slam_map.pgm / slam_map.yaml        # Saved demo map
+├── verify_gazebo_slam_setup.sh          # Pre-flight dependency check
+├── ARCHITECTURE.md                      # System architecture deep dive
+├── README_GAZEBO_SLAM.md               # Full SLAM demo documentation
+├── README_ISAAC_SLAM_ATTEMPT.md        # Isaac Sim attempt (archived learning)
+└── TEST_GAZEBO_SLAM.md                 # Testing checklist
+```
 
-🗄️ archive/isaac-slam-nav2-attempt (Completed - Archived)
-The Learning Experience
+## Architecture
 
-Attempted to integrate Isaac Sim with SLAM Toolbox for autonomous navigation
-Got 95% working: LiDAR scans, ROS2 bridge, SLAM node configuration
-Blocker: Isaac Sim's Transform Tree doesn't publish dynamic robot position
-Value: Demonstrates 8+ hours of systematic debugging, problem-solving skills, and knowing when to pivot
-All work documented in DEBUGGING_LOG.md and README_ISAAC_SLAM_ATTEMPT.md
+```
+┌─────────────┐     /scan      ┌──────────────┐     /map      ┌─────────────┐
+│   Gazebo     │ ────────────> │ SLAM Toolbox  │ ───────────> │    RViz2     │
+│  Simulator   │               │  (Mapping)    │              │ (Visualizer) │
+│             │ <────────────  │              │              │              │
+└─────────────┘    /cmd_vel    └──────────────┘              └─────────────┘
+       │                              │
+       │ /odom                       │ map→odom TF
+       v                              v
+┌─────────────────────────────────────────────┐
+│              Nav2 Stack                      │
+│  BT Navigator → Planner → Controller        │
+│  Velocity Smoother → Collision Monitor       │
+└─────────────────────────────────────────────┘
+```
 
-🎯 feature/slam-gazebo (In Progress - HIGH PRIORITY)
-Demo 1: Classical SLAM & Navigation
+**TF Tree:** `map → odom → base_footprint → base_link → {base_scan, camera_link, wheels}`
 
-Uses Gazebo simulator with Turtlebot3 (reliable TF system)
-Reuses all the SLAM/Nav2 configurations from the archived attempt
-Goal: Working demo of real-time map building + autonomous navigation
-Resume value: Industry-standard robotics demo showing ROS2, SLAM, path planning skills
-Status: Ready to implement (2-3 hours estimated)
+## Branch Strategy
 
-🤖 feature/isaac-cv (Planned)
-Demo 2: Computer Vision Navigation
+```
+main                          # Stable, tagged releases
+└── feature/vision-nav        # Camera + object detection + vision navigation
+```
 
-Keeps Isaac Sim (leverage its strengths: photorealistic rendering, synthetic data)
-Pivots from SLAM to vision-based navigation
-Adds camera + object detection (YOLO) for navigation decisions
-Goal: Robot makes decisions based on visual input (approach objects, avoid others)
-Resume value: Shows modern AI/ML skills, synthetic data generation for training
-Status: Planned after slam-gazebo demo (2-3 hours estimated)
+## Roadmap
 
-📊 main
-Clean, polished branch with README linking to both working demos and the documented learning experience.
+- [x] SLAM Toolbox integration with Gazebo
+- [x] Nav2 autonomous navigation
+- [x] Reactive gap-following obstacle avoidance
+- [ ] Camera sensor integration
+- [ ] Object detection (YOLOv8) with ROS2
+- [ ] Vision-based "find and go to object" behavior
+- [ ] Depth camera + 3D perception
+- [ ] ML training pipeline with synthetic Gazebo data
 
-# RUN
-/home/saman-aboutorab/isaacsim/python.sh src/main.py
-/home/saman-aboutorab/isaacsim/python.sh src/00_basic_drive.py
-/home/saman-aboutorab/isaacsim/python.sh src/20_ros2_laserscan.py
+## Documentation
 
-# ROS2 Topics
-source /opt/ros/jazzy/setup.bash
-ros2 topic list
-ros2 topic hz /scan
-ros2 topic echo /scan --once
-ros2 topic hz /cmd_vel
-ros2 topic echo /cmd_vel
-ros2 topic echo /tf --once
+| Document | Description |
+|----------|-------------|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | System architecture, data flow, TF tree |
+| [README_GAZEBO_SLAM.md](README_GAZEBO_SLAM.md) | Full SLAM demo docs |
+| [TEST_GAZEBO_SLAM.md](TEST_GAZEBO_SLAM.md) | Testing procedures |
+| [QUICK_START.md](QUICK_START.md) | One-page quick start |
+| [README_ISAAC_SLAM_ATTEMPT.md](README_ISAAC_SLAM_ATTEMPT.md) | Isaac Sim learning experience |
 
-# ROS2 cmd_vel manual
-ros2 topic pub -r 10 /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.3}, angular: {z: 0.0}}" 
+## License
 
-# Before running the package
-cd ~/projects/Robotics/isaac_diff_drive_nav/ros2_ws
-source install/setup.bash
-source /opt/ros/jazzy/setup.bash
-
-# ROS2 nodes
-ros2 run reactive_nav gap_follower
-ros2 run reactive_nav scan_sanitizer
-ros2 launch isaac_nav_bringup isaac_slam_nav.launch.py
-
-#ROS2 updates on the node
-cd ~/projects/Robotics/isaac_diff_drive_nav/ros2_ws
-source /opt/ros/jazzy/setup.bash
-colcon build --symlink-install
-source install/setup.bash
-
-#Rviz2
-rviz2
-ros2 param set /rviz use_sim_time true
-
-
-
+MIT

@@ -16,7 +16,7 @@
 
 🤖 How the Gazebo SLAM Project Works
 🎯 Big Picture Overview
-When you run ros2 launch isaac_nav_bringup gazebo_slam.launch.py, three major systems start up and talk to each other through ROS2 topics and transforms:
+When you run ros2 launch gazebo_nav_bringup gazebo_slam.launch.py, three major systems start up and talk to each other through ROS2 topics and transforms:
 
 
 ┌─────────────────┐         ┌──────────────────┐         ┌─────────────┐

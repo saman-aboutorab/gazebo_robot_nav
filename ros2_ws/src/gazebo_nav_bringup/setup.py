@@ -2,11 +2,11 @@ import os
 from glob import glob
 from setuptools import setup
 
-package_name = 'isaac_nav_bringup'
+package_name = 'gazebo_nav_bringup'
 
 setup(
     name=package_name,
-    version='0.0.0',
+    version='1.0.0',
     packages=[package_name],
     data_files=[
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
@@ -17,10 +17,10 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='saman',
-    maintainer_email='saman@todo.todo',
-    description='Isaac Sim SLAM + Nav2 bringup',
-    license='TODO',
+    maintainer='saman-aboutorab',
+    maintainer_email='saman.aboutorab@gmail.com',
+    description='Launch files and configs for Gazebo SLAM and Nav2 autonomous navigation with Turtlebot3',
+    license='MIT',
     tests_require=['pytest'],
     entry_points={'console_scripts': []},
 )

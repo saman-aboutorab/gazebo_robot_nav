@@ -1,6 +1,6 @@
 # Project Structure & Resume Strategy
 
-**Repository:** `isaac_diff_drive_nav`
+**Repository:** `gazebo_robot_nav`
 **Focus:** Autonomous Mobile Robotics with ROS2 Jazzy
 **Target Roles:** Software Engineer / AI Engineer in Robotics
 
@@ -32,14 +32,14 @@ main (stable demos)
 ## Repository Structure (feature/slam-gazebo)
 
 ```
-isaac_diff_drive_nav/
+gazebo_robot_nav/
 │
 ├── ros2_ws/
 │   ├── reactive_nav/                        # Reactive navigation package
 │   │   ├── gap_follower.py                  # 3-sector gap-following avoidance
 │   │   └── scan_sanitizer.py                # LiDAR data preprocessing
 │   │
-│   └── src/isaac_nav_bringup/               # Main bringup package
+│   └── src/gazebo_nav_bringup/               # Main bringup package
 │       ├── launch/
 │       │   ├── gazebo_slam.launch.py        # SLAM only (no Nav2)
 │       │   └── gazebo_slam_nav.launch.py    # SLAM + Nav2 (full demo)

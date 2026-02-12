@@ -4,7 +4,7 @@ package_name = 'reactive_nav'
 
 setup(
     name=package_name,
-    version='0.0.0',
+    version='1.0.0',
     packages=find_packages(exclude=['test']),
     data_files=[
         ('share/ament_index/resource_index/packages',
@@ -15,8 +15,8 @@ setup(
     zip_safe=True,
     maintainer='saman-aboutorab',
     maintainer_email='saman.aboutorab@gmail.com',
-    description='TODO: Package description',
-    license='TODO: License declaration',
+    description='Reactive navigation nodes: gap-following obstacle avoidance and LiDAR scan preprocessing',
+    license='MIT',
     extras_require={
         'test': [
             'pytest',

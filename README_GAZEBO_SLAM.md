@@ -1,6 +1,6 @@
 # Gazebo SLAM Demo - Autonomous Mobile Robot Navigation
 
-**Branch:** `feature/slam-gazebo`
+**Branch:** `main`
 **Status:** ✅ Complete & Functional
 **Date:** February 2026
 
@@ -25,11 +25,11 @@ This demo showcases real-time SLAM (Simultaneous Localization and Mapping) and a
 
 **Terminal 1 - Launch SLAM System:**
 ```bash
-cd ~/projects/Robotics/isaac_diff_drive_nav/ros2_ws
+cd ~/projects/Robotics/gazebo_robot_nav/ros2_ws
 source install/setup.bash
 export TURTLEBOT3_MODEL=waffle
 
-ros2 launch isaac_nav_bringup gazebo_slam.launch.py
+ros2 launch gazebo_nav_bringup gazebo_slam.launch.py
 ```
 
 This single command starts:
@@ -39,7 +39,7 @@ This single command starts:
 
 **Terminal 2 - Robot Control:**
 ```bash
-cd ~/projects/Robotics/isaac_diff_drive_nav/ros2_ws
+cd ~/projects/Robotics/gazebo_robot_nav/ros2_ws
 source install/setup.bash
 export TURTLEBOT3_MODEL=waffle
 
@@ -78,7 +78,7 @@ ros2 run turtlebot3_teleop teleop_keyboard
 
 ```bash
 # In a third terminal
-cd ~/projects/Robotics/isaac_diff_drive_nav
+cd ~/projects/Robotics/gazebo_robot_nav
 source ros2_ws/install/setup.bash
 
 ros2 run nav2_map_server map_saver_cli -f my_map --use-sim-time
@@ -137,18 +137,18 @@ map (fixed frame)
 
 ### Configuration Files
 
-1. **[slam_params_turtlebot3.yaml](ros2_ws/src/isaac_nav_bringup/config/slam_params_turtlebot3.yaml)**
+1. **[slam_params_turtlebot3.yaml](ros2_ws/src/gazebo_nav_bringup/config/slam_params_turtlebot3.yaml)**
    - Ceres solver configuration
    - Frame names: odom, base_footprint, map
    - Loop closure parameters
    - Scan matching settings
 
-2. **[gazebo_slam.launch.py](ros2_ws/src/isaac_nav_bringup/launch/gazebo_slam.launch.py)**
+2. **[gazebo_slam.launch.py](ros2_ws/src/gazebo_nav_bringup/launch/gazebo_slam.launch.py)**
    - Orchestrates Gazebo, SLAM, RViz
    - Configurable world selection
    - Automatic parameter passing
 
-3. **[slam_config.rviz](ros2_ws/src/isaac_nav_bringup/rviz/slam_config.rviz)**
+3. **[slam_config.rviz](ros2_ws/src/gazebo_nav_bringup/rviz/slam_config.rviz)**
    - Pre-configured displays
    - Optimal view settings
    - Tool configurations
@@ -269,7 +269,7 @@ ros2 topic echo /cmd_vel  # Should show values when pressing keys
 ## Files Structure
 
 ```
-ros2_ws/src/isaac_nav_bringup/
+ros2_ws/src/gazebo_nav_bringup/
 ├── config/
 │   └── slam_params_turtlebot3.yaml   # SLAM configuration
 ├── launch/
@@ -292,13 +292,12 @@ Additional:
 
 ## Future Enhancements
 
-Potential additions:
-- [ ] Nav2 integration for autonomous navigation
+- [x] Nav2 integration for autonomous navigation
+- [x] Behavior tree integration
+- [ ] Camera sensor integration and object detection
+- [ ] Vision-based navigation
 - [ ] Multiple world environments
 - [ ] Custom obstacle courses
-- [ ] Path planning demonstrations
-- [ ] Waypoint navigation
-- [ ] Behavior tree integration
 
 ## License
 

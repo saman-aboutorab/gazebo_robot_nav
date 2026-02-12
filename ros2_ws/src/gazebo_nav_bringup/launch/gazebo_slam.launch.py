@@ -22,13 +22,13 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     # Package directories
-    pkg_isaac_nav_bringup = get_package_share_directory('isaac_nav_bringup')
+    pkg_gazebo_nav_bringup = get_package_share_directory('gazebo_nav_bringup')
     pkg_turtlebot3_gazebo = get_package_share_directory('turtlebot3_gazebo')
     pkg_slam_toolbox = get_package_share_directory('slam_toolbox')
 
     # Paths
     slam_params_file = os.path.join(
-        pkg_isaac_nav_bringup,
+        pkg_gazebo_nav_bringup,
         'config',
         'slam_params_turtlebot3.yaml'
     )
@@ -75,7 +75,7 @@ def generate_launch_description():
 
     # RViz2 node
     rviz_config = os.path.join(
-        pkg_isaac_nav_bringup,
+        pkg_gazebo_nav_bringup,
         'rviz',
         'slam_config.rviz'
     )

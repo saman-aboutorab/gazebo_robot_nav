@@ -1,4 +1,4 @@
-# isaac_nav_bringup/config/nav2_params.yaml
+# gazebo_nav_bringup/config/nav2_params.yaml
 #
 # ROS 2 Jazzy params file rules:
 # - NO top-level params (everything must be under <node_name>: ros__parameters:)

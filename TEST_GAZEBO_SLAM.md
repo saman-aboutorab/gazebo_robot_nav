@@ -4,11 +4,11 @@
 
 ### Terminal 1: Launch SLAM System
 ```bash
-cd ~/projects/Robotics/isaac_diff_drive_nav/ros2_ws
+cd ~/projects/Robotics/gazebo_robot_nav/ros2_ws
 source install/setup.bash
 export TURTLEBOT3_MODEL=waffle
 
-ros2 launch isaac_nav_bringup gazebo_slam.launch.py
+ros2 launch gazebo_nav_bringup gazebo_slam.launch.py
 ```
 
 **Expected behavior:**
@@ -21,7 +21,7 @@ ros2 launch isaac_nav_bringup gazebo_slam.launch.py
 
 ### Terminal 2: Teleoperation Control
 ```bash
-cd ~/projects/Robotics/isaac_diff_drive_nav/ros2_ws
+cd ~/projects/Robotics/gazebo_robot_nav/ros2_ws
 source install/setup.bash
 export TURTLEBOT3_MODEL=waffle
 
@@ -86,7 +86,7 @@ ros2 run tf2_tools view_frames
 ### Step 5: Save Map (1 minute)
 ```bash
 # In Terminal 3
-cd ~/projects/Robotics/isaac_diff_drive_nav
+cd ~/projects/Robotics/gazebo_robot_nav
 ros2 run nav2_map_server map_saver_cli -f turtlebot3_map --use-sim-time
 ```
 
