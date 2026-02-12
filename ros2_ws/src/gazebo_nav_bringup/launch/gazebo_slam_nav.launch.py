@@ -2,7 +2,7 @@
 """
 Gazebo SLAM + Nav2 Launch File
 
-Launches Gazebo + SLAM Toolbox + Nav2 + RViz2 together.
+Launches Gazebo (house world) + SLAM Toolbox + Nav2 + RViz2 together.
 Nav2 nodes are launched individually (no docking_server) so the
 lifecycle_manager doesn't wait for an unused node at startup.
 
@@ -12,7 +12,9 @@ Robot can be commanded autonomously via RViz2 "2D Goal Pose" tool.
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import (
+    AppendEnvironmentVariable, DeclareLaunchArgument, IncludeLaunchDescription
+)
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -22,6 +24,7 @@ def generate_launch_description():
     pkg_gazebo_nav_bringup = get_package_share_directory('gazebo_nav_bringup')
     pkg_turtlebot3_gazebo = get_package_share_directory('turtlebot3_gazebo')
     pkg_slam_toolbox = get_package_share_directory('slam_toolbox')
+    pkg_ros_gz_sim = get_package_share_directory('ros_gz_sim')
 
     slam_params_file = os.path.join(
         pkg_gazebo_nav_bringup, 'config', 'slam_params_turtlebot3.yaml'
@@ -32,28 +35,60 @@ def generate_launch_description():
     rviz_config = os.path.join(
         pkg_gazebo_nav_bringup, 'rviz', 'slam_config.rviz'
     )
+    house_world = os.path.join(
+        pkg_turtlebot3_gazebo, 'worlds', 'turtlebot3_house.world'
+    )
 
     use_sim_time = LaunchConfiguration('use_sim_time', default='true')
+    x_pose = LaunchConfiguration('x_pose', default='-2.0')
+    y_pose = LaunchConfiguration('y_pose', default='-0.5')
 
     declare_use_sim_time = DeclareLaunchArgument(
-        'use_sim_time',
-        default_value='true',
-        description='Use simulation time'
+        'use_sim_time', default_value='true', description='Use simulation time'
     )
 
     # TF remappings required by all Nav2 nodes
     remappings = [('/tf', 'tf'), ('/tf_static', 'tf_static')]
 
-    # ── Gazebo + Turtlebot3 ──────────────────────────────────────────────────
-    gazebo_turtlebot3 = IncludeLaunchDescription(
+    # ── Gazebo model path — MUST be set before Gazebo starts ─────────────────
+    # turtlebot3_house.launch.py sets this AFTER gz starts (bug), so we do it
+    # here first and launch Gazebo directly instead of including that file.
+    set_gz_model_path = AppendEnvironmentVariable(
+        'GZ_SIM_RESOURCE_PATH',
+        os.path.join(pkg_turtlebot3_gazebo, 'models')
+    )
+
+    # ── Gazebo server + client ────────────────────────────────────────────────
+    gzserver = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(pkg_turtlebot3_gazebo, 'launch', 'turtlebot3_world.launch.py')
+            os.path.join(pkg_ros_gz_sim, 'launch', 'gz_sim.launch.py')
         ),
         launch_arguments={
-            'use_sim_time': use_sim_time,
-            'x_pose': '0.5',
-            'y_pose': '0.5'
+            'gz_args': ['-r -s -v2 ', house_world],
+            'on_exit_shutdown': 'true'
         }.items()
+    )
+
+    gzclient = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(pkg_ros_gz_sim, 'launch', 'gz_sim.launch.py')
+        ),
+        launch_arguments={'gz_args': '-g -v2 ', 'on_exit_shutdown': 'true'}.items()
+    )
+
+    # ── Robot state publisher + spawn ─────────────────────────────────────────
+    robot_state_publisher = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(pkg_turtlebot3_gazebo, 'launch', 'robot_state_publisher.launch.py')
+        ),
+        launch_arguments={'use_sim_time': use_sim_time}.items()
+    )
+
+    spawn_turtlebot3 = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(pkg_turtlebot3_gazebo, 'launch', 'spawn_turtlebot3.launch.py')
+        ),
+        launch_arguments={'x_pose': x_pose, 'y_pose': y_pose}.items()
     )
 
     # ── SLAM Toolbox ─────────────────────────────────────────────────────────
@@ -180,7 +215,12 @@ def generate_launch_description():
 
     ld = LaunchDescription()
     ld.add_action(declare_use_sim_time)
-    ld.add_action(gazebo_turtlebot3)
+    # env var FIRST — before any Gazebo process starts
+    ld.add_action(set_gz_model_path)
+    ld.add_action(gzserver)
+    ld.add_action(gzclient)
+    ld.add_action(robot_state_publisher)
+    ld.add_action(spawn_turtlebot3)
     ld.add_action(slam_toolbox_node)
     ld.add_action(controller_server)
     ld.add_action(smoother_server)

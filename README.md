@@ -28,23 +28,37 @@ This project implements a complete autonomous mobile robot navigation system usi
 ### One-Time Setup
 ```bash
 cd ~/projects/Robotics/gazebo_robot_nav/ros2_ws
+rm -rf build/ install/ log/
 colcon build --symlink-install
 ```
 
-### SLAM Only (map building + teleop)
+### Verify Setup
 ```bash
-# Terminal 1: Launch system
+source install/setup.bash
+export TURTLEBOT3_MODEL=waffle
+ros2 pkg list | grep gazebo_nav_bringup   # Should print: gazebo_nav_bringup
+./verify_gazebo_slam_setup.sh              # All checks should pass
+```
+
+### SLAM Only (map building + teleop)
+
+**Terminal 1** — Launch Gazebo (house world) + SLAM + RViz:
+```bash
 cd ~/projects/Robotics/gazebo_robot_nav/ros2_ws
 source install/setup.bash
 export TURTLEBOT3_MODEL=waffle
 ros2 launch gazebo_nav_bringup gazebo_slam.launch.py
+```
 
-# Terminal 2: Drive the robot
+**Terminal 2** — Drive the robot with keyboard:
+```bash
 cd ~/projects/Robotics/gazebo_robot_nav/ros2_ws
 source install/setup.bash
 export TURTLEBOT3_MODEL=waffle
 ros2 run turtlebot3_teleop teleop_keyboard
 ```
+
+**Controls:** `w` forward, `x` backward, `a` turn left, `d` turn right, `s` stop
 
 ### SLAM + Autonomous Navigation
 ```bash
@@ -60,6 +74,12 @@ ros2 launch gazebo_nav_bringup gazebo_slam_nav.launch.py
 cd ~/projects/Robotics/gazebo_robot_nav
 source ros2_ws/install/setup.bash
 ros2 run nav2_map_server map_saver_cli -f my_map --use-sim-time
+```
+
+### Cleanup
+```bash
+# Kill all ROS2/Gazebo processes
+bash ~/projects/Robotics/gazebo_robot_nav/ros2_ws/kill_ros.sh
 ```
 
 ## Project Structure
