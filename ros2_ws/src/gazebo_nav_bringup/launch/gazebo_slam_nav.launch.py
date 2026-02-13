@@ -38,6 +38,9 @@ def generate_launch_description():
     house_world = os.path.join(
         pkg_turtlebot3_gazebo, 'worlds', 'turtlebot3_house.world'
     )
+    local_model_path = os.path.join(
+        pkg_gazebo_nav_bringup, 'models', 'turtlebot3_waffle', 'model.sdf'
+    )
 
     use_sim_time = LaunchConfiguration('use_sim_time', default='true')
     x_pose = LaunchConfiguration('x_pose', default='-2.0')
@@ -84,12 +87,39 @@ def generate_launch_description():
         launch_arguments={'use_sim_time': use_sim_time}.items()
     )
 
-    spawn_turtlebot3 = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(pkg_turtlebot3_gazebo, 'launch', 'spawn_turtlebot3.launch.py')
-        ),
-        launch_arguments={'x_pose': x_pose, 'y_pose': y_pose}.items()
+    # Spawn robot using our local model (lower-res camera)
+    spawn_turtlebot3 = Node(
+        package='ros_gz_sim',
+        executable='create',
+        arguments=[
+            '-name', 'waffle',
+            '-file', local_model_path,
+            '-x', x_pose,
+            '-y', y_pose,
+            '-z', '0.01',
+        ],
+        output='screen',
     )
+
+    # Bridge Gazebo topics to ROS (same config the stock launch uses)
+    bridge_params = os.path.join(
+        pkg_turtlebot3_gazebo, 'params', 'turtlebot3_waffle_bridge.yaml'
+    )
+    gz_ros_bridge = Node(
+        package='ros_gz_bridge',
+        executable='parameter_bridge',
+        arguments=['--ros-args', '-p', f'config_file:={bridge_params}'],
+        output='screen',
+    )
+
+    # Bridge camera images (Gazebo → ROS)
+    image_bridge = Node(
+        package='ros_gz_image',
+        executable='image_bridge',
+        arguments=['/camera/image_raw'],
+        output='screen',
+    )
+
 
     # ── SLAM Toolbox ─────────────────────────────────────────────────────────
     slam_toolbox_node = IncludeLaunchDescription(
@@ -221,6 +251,8 @@ def generate_launch_description():
     ld.add_action(gzclient)
     ld.add_action(robot_state_publisher)
     ld.add_action(spawn_turtlebot3)
+    ld.add_action(gz_ros_bridge)
+    ld.add_action(image_bridge)
     ld.add_action(slam_toolbox_node)
     ld.add_action(controller_server)
     ld.add_action(smoother_server)

@@ -87,7 +87,7 @@ ros2 run tf2_tools view_frames
 ```bash
 # In Terminal 3
 cd ~/projects/Robotics/gazebo_robot_nav
-ros2 run nav2_map_server map_saver_cli -f turtlebot3_map --use-sim-time
+ros2 run nav2_map_server map_saver_cli -f slam_map --ros-args -p use_sim_time:=true
 ```
 
 **Expected output:**

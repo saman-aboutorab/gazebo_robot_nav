@@ -73,13 +73,13 @@ ros2 launch gazebo_nav_bringup gazebo_slam_nav.launch.py
 ```bash
 cd ~/projects/Robotics/gazebo_robot_nav
 source ros2_ws/install/setup.bash
-ros2 run nav2_map_server map_saver_cli -f my_map --use-sim-time
+ros2 run nav2_map_server map_saver_cli -f slam_map --ros-args -p use_sim_time:=true
 ```
 
 ### Cleanup
 ```bash
-# Kill all ROS2/Gazebo processes
-bash ~/projects/Robotics/gazebo_robot_nav/ros2_ws/kill_ros.sh
+# Kill all ROS2/Gazebo processes (run before each fresh launch)
+~/projects/Robotics/gazebo_robot_nav/kill_all.sh
 ```
 
 ## Project Structure

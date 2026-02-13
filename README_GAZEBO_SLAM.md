@@ -81,7 +81,7 @@ ros2 run turtlebot3_teleop teleop_keyboard
 cd ~/projects/Robotics/gazebo_robot_nav
 source ros2_ws/install/setup.bash
 
-ros2 run nav2_map_server map_saver_cli -f my_map --use-sim-time
+ros2 run nav2_map_server map_saver_cli -f slam_map --ros-args -p use_sim_time:=true
 ```
 
 Output files:
