@@ -20,6 +20,9 @@ build/
 install/
 log/
 
+# ML model weights
+*.pt
+
 # Isaac Sim / Omniverse generated assets (legacy)
 *.usd
 *.usda

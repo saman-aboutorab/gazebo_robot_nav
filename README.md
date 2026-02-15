@@ -12,6 +12,7 @@ This project implements a complete autonomous mobile robot navigation system usi
 - LiDAR-based reactive gap-following navigation
 - Camera sensor with image bridging (640x480, ~5 Hz)
 - YOLOv8 object detection with annotated image output
+- Depth camera with real distance measurement
 - Single-command launch orchestrating 15+ ROS2 nodes
 
 ## Tech Stack
@@ -99,7 +100,7 @@ source ~/projects/Robotics/gazebo_robot_nav/ros2_ws/install/setup.bash
 ros2 run gazebo_nav_bringup find_and_go --ros-args -p target_object:=person
 ```
 
-The robot rotates to scan the room, detects the target with YOLOv8, then uses Nav2 to navigate toward it. Configurable parameters: `target_object`, `confidence_threshold`, `approach_distance`.
+The robot rotates to scan the room, detects the target with YOLOv8, then uses Nav2 to navigate toward it. Configurable parameters: `target_object`, `confidence_threshold`, `stop_distance`.
 
 ### Save Map
 ```bash
@@ -182,7 +183,7 @@ main                          # Stable, tagged releases
 - [x] Camera sensor integration
 - [x] Object detection (YOLOv8) with ROS2
 - [x] Vision-based "find and go to object" behavior
-- [ ] Depth camera + 3D perception
+- [x] Depth camera + 3D perception
 - [ ] ML training pipeline with synthetic Gazebo data
 
 ## Documentation

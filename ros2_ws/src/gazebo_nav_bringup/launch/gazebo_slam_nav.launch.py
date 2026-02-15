@@ -112,11 +112,11 @@ def generate_launch_description():
         output='screen',
     )
 
-    # Bridge camera images (Gazebo → ROS)
+    # Bridge camera images (Gazebo → ROS): RGB + Depth
     image_bridge = Node(
         package='ros_gz_image',
         executable='image_bridge',
-        arguments=['/camera/image_raw'],
+        arguments=['/camera/image_raw', '/camera/depth'],
         output='screen',
     )
 
