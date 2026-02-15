@@ -24,5 +24,7 @@ setup(
     description='Launch files and configs for Gazebo SLAM and Nav2 autonomous navigation with Turtlebot3',
     license='MIT',
     tests_require=['pytest'],
-    entry_points={'console_scripts': []},
+    entry_points={'console_scripts': [
+        'vision_detector = gazebo_nav_bringup.vision_detector_node:main',
+    ]},
 )
