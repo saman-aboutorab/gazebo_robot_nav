@@ -10,9 +10,9 @@ This project implements a complete autonomous mobile robot navigation system usi
 - Real-time SLAM mapping (SLAM Toolbox, online async mode)
 - Autonomous path planning and obstacle avoidance (Nav2 stack)
 - LiDAR-based reactive gap-following navigation
+- Camera sensor with image bridging (640x480, ~5 Hz)
+- YOLOv8 object detection with annotated image output
 - Single-command launch orchestrating 15+ ROS2 nodes
-
-**In progress:** Vision-based navigation with camera integration and object detection (see `feature/vision-nav` branch).
 
 ## Tech Stack
 
@@ -21,6 +21,7 @@ This project implements a complete autonomous mobile robot navigation system usi
 - **Robot:** Turtlebot3 Waffle
 - **SLAM:** SLAM Toolbox (Ceres solver, loop closure)
 - **Navigation:** Nav2 (BT Navigator, RegulatedPurePursuit controller, Navfn planner)
+- **Vision:** YOLOv8 (Ultralytics), OpenCV, cv_bridge
 - **Language:** Python 3
 
 ## Quick Start
@@ -69,6 +70,26 @@ ros2 launch gazebo_nav_bringup gazebo_slam_nav.launch.py
 # Use RViz "2D Nav Goal" to send the robot to a target pose
 ```
 
+### Vision Detection
+
+**Terminal 2** — Start YOLOv8 detector (while simulation is running):
+```bash
+source /opt/ros/jazzy/setup.bash
+source ~/projects/Robotics/gazebo_robot_nav/ros2_ws/install/setup.bash
+ros2 run gazebo_nav_bringup vision_detector
+```
+
+**View detections in RViz:** Add → By topic → `/camera/detections_image` → Image
+
+**Spawn a person model** (optional, gives the detector something to find):
+```bash
+gz service -s /world/default/create \
+  --reqtype gz.msgs.EntityFactory \
+  --reptype gz.msgs.Boolean \
+  --timeout 5000 \
+  --req 'sdf_filename: "https://fuel.gazebosim.org/1.0/OpenRobotics/models/Standing person", pose: {position: {x: 2.5, y: -2.5, z: 0}}'
+```
+
 ### Save Map
 ```bash
 cd ~/projects/Robotics/gazebo_robot_nav
@@ -90,7 +111,11 @@ gazebo_robot_nav/
 │   ├── src/gazebo_nav_bringup/          # Main bringup package
 │   │   ├── launch/
 │   │   │   ├── gazebo_slam.launch.py    # SLAM only
-│   │   │   └── gazebo_slam_nav.launch.py # SLAM + Nav2
+│   │   │   └── gazebo_slam_nav.launch.py # SLAM + Nav2 + camera
+│   │   ├── gazebo_nav_bringup/
+│   │   │   └── vision_detector_node.py  # YOLOv8 detection node
+│   │   ├── models/
+│   │   │   └── turtlebot3_waffle/       # Local model (640x480 camera)
 │   │   ├── config/
 │   │   │   ├── slam_params_turtlebot3.yaml
 │   │   │   └── nav2_params.yaml
@@ -143,8 +168,8 @@ main                          # Stable, tagged releases
 - [x] SLAM Toolbox integration with Gazebo
 - [x] Nav2 autonomous navigation
 - [x] Reactive gap-following obstacle avoidance
-- [ ] Camera sensor integration
-- [ ] Object detection (YOLOv8) with ROS2
+- [x] Camera sensor integration
+- [x] Object detection (YOLOv8) with ROS2
 - [ ] Vision-based "find and go to object" behavior
 - [ ] Depth camera + 3D perception
 - [ ] ML training pipeline with synthetic Gazebo data
