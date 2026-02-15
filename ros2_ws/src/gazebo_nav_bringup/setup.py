@@ -26,5 +26,7 @@ setup(
     tests_require=['pytest'],
     entry_points={'console_scripts': [
         'vision_detector = gazebo_nav_bringup.vision_detector_node:main',
+        'find_and_go = gazebo_nav_bringup.find_and_go_node:main',
     ]},
+
 )

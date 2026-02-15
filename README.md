@@ -81,7 +81,7 @@ ros2 run gazebo_nav_bringup vision_detector
 
 **View detections in RViz:** Add → By topic → `/camera/detections_image` → Image
 
-**Spawn a person model** (optional, gives the detector something to find):
+**Spawn a person model** (gives the detector something to find):
 ```bash
 gz service -s /world/default/create \
   --reqtype gz.msgs.EntityFactory \
@@ -89,6 +89,17 @@ gz service -s /world/default/create \
   --timeout 5000 \
   --req 'sdf_filename: "https://fuel.gazebosim.org/1.0/OpenRobotics/models/Standing person", pose: {position: {x: 2.5, y: -2.5, z: 0}}'
 ```
+
+### Find and Go to Object
+
+**Terminal 2** — Robot searches for a target, then navigates toward it:
+```bash
+source /opt/ros/jazzy/setup.bash
+source ~/projects/Robotics/gazebo_robot_nav/ros2_ws/install/setup.bash
+ros2 run gazebo_nav_bringup find_and_go --ros-args -p target_object:=person
+```
+
+The robot rotates to scan the room, detects the target with YOLOv8, then uses Nav2 to navigate toward it. Configurable parameters: `target_object`, `confidence_threshold`, `approach_distance`.
 
 ### Save Map
 ```bash
@@ -170,7 +181,7 @@ main                          # Stable, tagged releases
 - [x] Reactive gap-following obstacle avoidance
 - [x] Camera sensor integration
 - [x] Object detection (YOLOv8) with ROS2
-- [ ] Vision-based "find and go to object" behavior
+- [x] Vision-based "find and go to object" behavior
 - [ ] Depth camera + 3D perception
 - [ ] ML training pipeline with synthetic Gazebo data
 
