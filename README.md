@@ -36,10 +36,11 @@ colcon build --symlink-install
 
 ### Verify Setup
 ```bash
+cd ~/projects/Robotics/gazebo_robot_nav/ros2_ws
 source install/setup.bash
 export TURTLEBOT3_MODEL=waffle
 ros2 pkg list | grep gazebo_nav_bringup   # Should print: gazebo_nav_bringup
-./verify_gazebo_slam_setup.sh              # All checks should pass
+../verify_gazebo_slam_setup.sh             # All checks should pass
 ```
 
 ### SLAM Only (map building + teleop)
@@ -73,7 +74,9 @@ ros2 launch gazebo_nav_bringup gazebo_slam_nav.launch.py
 
 ### Vision Detection
 
-**Terminal 2** — Start YOLOv8 detector (while simulation is running):
+> Requires SLAM + Nav2 running in Terminal 1 (see above).
+
+**Terminal 2** — Start YOLOv8 detector:
 ```bash
 source /opt/ros/jazzy/setup.bash
 source ~/projects/Robotics/gazebo_robot_nav/ros2_ws/install/setup.bash
@@ -92,6 +95,8 @@ gz service -s /world/default/create \
 ```
 
 ### Find and Go to Object
+
+> Requires SLAM + Nav2 running in Terminal 1. Drive around with teleop first to build a map, then run this node.
 
 **Terminal 2** — Robot searches for a target, then navigates toward it:
 ```bash
@@ -125,9 +130,10 @@ gazebo_robot_nav/
 │   │   │   ├── gazebo_slam.launch.py    # SLAM only
 │   │   │   └── gazebo_slam_nav.launch.py # SLAM + Nav2 + camera
 │   │   ├── gazebo_nav_bringup/
-│   │   │   └── vision_detector_node.py  # YOLOv8 detection node
+│   │   │   ├── vision_detector_node.py  # YOLOv8 detection node
+│   │   │   └── find_and_go_node.py     # Vision search + Nav2 goal node
 │   │   ├── models/
-│   │   │   └── turtlebot3_waffle/       # Local model (640x480 camera)
+│   │   │   └── turtlebot3_waffle/       # Local model (RGB 640x480 + depth 320x240)
 │   │   ├── config/
 │   │   │   ├── slam_params_turtlebot3.yaml
 │   │   │   └── nav2_params.yaml
@@ -151,22 +157,26 @@ gazebo_robot_nav/
 ## Architecture
 
 ```
-┌─────────────┐     /scan      ┌──────────────┐     /map      ┌─────────────┐
-│   Gazebo     │ ────────────> │ SLAM Toolbox  │ ───────────> │    RViz2     │
-│  Simulator   │               │  (Mapping)    │              │ (Visualizer) │
-│             │ <────────────  │              │              │              │
-└─────────────┘    /cmd_vel    └──────────────┘              └─────────────┘
-       │                              │
-       │ /odom                       │ map→odom TF
-       v                              v
-┌─────────────────────────────────────────────┐
-│              Nav2 Stack                      │
-│  BT Navigator → Planner → Controller        │
-│  Velocity Smoother → Collision Monitor       │
-└─────────────────────────────────────────────┘
+┌──────────────┐    /scan     ┌──────────────┐    /map     ┌─────────────┐
+│    Gazebo     │ ──────────> │ SLAM Toolbox  │ ─────────> │    RViz2     │
+│   Simulator   │              │  (Mapping)    │             │ (Visualizer) │
+│              │ <──────────  │              │             │              │
+└──────────────┘   /cmd_vel   └──────────────┘             └─────────────┘
+   │   │                             │
+   │   │  /camera/image_raw          │ map→odom TF
+   │   │  /camera/depth              v
+   │   │                    ┌─────────────────────────────────────────────┐
+   │   └──────────────────> │              Nav2 Stack                      │
+   │  /odom                 │  BT Navigator → Planner → Controller        │
+   v                        │  Velocity Smoother → Collision Monitor       │
+┌──────────────┐            └─────────────────────────────────────────────┘
+│  Find-and-Go  │                          ^
+│  (YOLOv8 +    │  NavigateToPose action   │
+│   Depth)      │ ─────────────────────────┘
+└──────────────┘
 ```
 
-**TF Tree:** `map → odom → base_footprint → base_link → {base_scan, camera_link, wheels}`
+**TF Tree:** `map → odom → base_footprint → base_link → {base_scan, camera_rgb_frame, wheels}`
 
 ## Branch Strategy
 
