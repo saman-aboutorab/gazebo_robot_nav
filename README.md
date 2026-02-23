@@ -187,6 +187,7 @@ main                          # Stable, tagged releases
 
 ## Roadmap
 
+### Completed
 - [x] SLAM Toolbox integration with Gazebo
 - [x] Nav2 autonomous navigation
 - [x] Reactive gap-following obstacle avoidance
@@ -194,7 +195,20 @@ main                          # Stable, tagged releases
 - [x] Object detection (YOLOv8) with ROS2
 - [x] Vision-based "find and go to object" behavior
 - [x] Depth camera + 3D perception
-- [ ] ML training pipeline with synthetic Gazebo data
+
+### Upcoming Phases
+
+- [ ] **Phase 1 — Map-Frame Goal Localization**: Transform detected object positions into the `/map` frame using TF2 (`depth + bbox → camera_frame → base_link → odom → map`) before sending Nav2 goals. Fixes a fundamental flaw where the current node ignores SLAM localization and relies on drifting odometry instead.
+
+- [ ] **Phase 2 — Point Cloud Centroid for Depth**: Replace the single-pixel depth lookup with a point cloud centroid computed across the full YOLO bounding box region (using PCL or Open3D). Far more robust to sensor noise and bbox edge artifacts; directly improves Phase 1 goal accuracy.
+
+- [ ] **Phase 3 — Recovery Behaviors and Dynamic Obstacles**: Tune Nav2 local costmap inflation for smoother potentials, enable recovery plugins (Spin, BackUp, Wait), and test in dynamic worlds with moving Gazebo actors. Integrate the existing gap-follower as a custom Nav2 controller or behavior tree node.
+
+- [ ] **Phase 4 — Vision Obstacles into Nav2 Costmap**: Feed camera-detected obstacles into the Nav2 costmap — either via depth-to-point-cloud through the obstacle layer, or as semantic keepout polygons for detected classes (e.g. person, fragile object). Extends Phase 3's costmap infrastructure with live camera perception.
+
+- [ ] **Phase 5 — Nav2 Behavior Tree Integration**: Encode the find-and-go behavior as a proper BT with nodes: `SearchForTarget → ComputeTargetPose → NavigateToPose → Recovery`. Makes the behavior maintainable, extensible, and failure-aware at the architecture level.
+
+- [ ] **Phase 6 — Multi-Object Targeting with Selection Logic**: Support detecting multiple objects simultaneously and add a configurable selection policy — closest by depth, highest confidence, or user-specified target class via ROS2 parameter at runtime.
 
 ## Documentation
 
