@@ -228,9 +228,17 @@ main                          # Stable, tagged releases
 
 - [x] **Phase 3 — Multi-Object Targeting with Selection Logic**: Support detecting multiple objects simultaneously and add a configurable selection policy — closest by depth, highest confidence, or user-specified target class via ROS2 parameter at runtime.
 
-- [ ] **Phase 4 — Nav2 Behavior Tree Integration**: Encode the find-and-go behavior as a proper BT with nodes: `SearchForTarget → ComputeTargetPose → NavigateToPose → Recovery`. Makes the behavior maintainable, extensible, and failure-aware at the architecture level.
+- [ ] **Phase 4 — Vision Obstacles into Nav2 Costmap**: Run a background Python node that back-projects camera-detected obstacles (YOLO bounding boxes + depth) into the Nav2 local costmap as a `PointCloud2` stream consumed by the costmap's obstacle layer. The planner and local controller will then treat visually-detected objects (e.g. a person) as real obstacles and plan around them — even before the LiDAR sees them. Implemented as a standalone Python node that runs alongside the navigation stack; no changes to `find_and_go_node.py` required.
 
-- [ ] **Phase 5 — Vision Obstacles into Nav2 Costmap**: Feed camera-detected obstacles into the Nav2 costmap — either via depth-to-point-cloud through the obstacle layer, or as semantic keepout polygons for detected classes (e.g. person, fragile object). Extends Phase 4's costmap infrastructure with live camera perception.
+- [ ] **Phase 5 — Behavior Tree Integration with py_trees_ros**: Replace the monolithic callback-based state machine in `find_and_go_node.py` with a proper Behavior Tree using the `py_trees` / `py_trees_ros` Python libraries (the standard Python-native BT framework for ROS2; Nav2's own BT executor uses BehaviorTree.CPP which requires C++ plugins). The tree structure is:
+  ```
+  Retry(num_failures=∞)
+   └── Sequence
+         ├── SearchForTarget    — rotates, runs YOLO + multi-object selection, writes 3D centroid to blackboard
+         ├── ComputeTargetPose  — reads centroid, TF2 → map frame, writes Nav2 goal to blackboard
+         └── NavigateToGoal     — sends Nav2 NavigateToPose action, polls result (RUNNING → SUCCESS/FAILURE)
+  ```
+  Each leaf node is a Python class with `initialise() / update() / terminate()` methods returning `SUCCESS`, `FAILURE`, or `RUNNING` each tick. Nodes communicate via the **blackboard** (shared key-value store) rather than direct calls. Any `FAILURE` propagates up the `Sequence` and is caught by `Retry`, which automatically re-ticks from `SearchForTarget` — eliminating all the scattered `self.state = 'searching'` reset logic. Done after Phase 4 so the BT is designed with the vision-aware costmap already in place.
 
 - [ ] **Phase 6 — Dynamic Obstacles with Moving Gazebo Actors**: Replace the static "Standing person" test model with a Gazebo `<actor>` that walks a scripted waypoint path. Verify that the Nav2 local costmap correctly marks and clears the moving obstacle, that the planner replans around it, and that the Phase 7 recovery behaviors (Wait, Spin) trigger correctly when the actor temporarily blocks the robot's path.
 
