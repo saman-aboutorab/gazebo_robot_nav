@@ -96,7 +96,7 @@ gz service -s /world/default/create \
 
 ### Find and Go to Object
 
-Uses foreground-filtered 3D centroid depth + TF2 map-frame goal localization (Phase 2): detects object with YOLOv8, back-projects all depth pixels in the bounding box to camera-frame 3D points, isolates the nearest depth cluster (foreground object, not background wall), computes the 3D centroid, transforms to `/map` via TF2, and sends a Nav2 goal in map coordinates.
+Uses multi-object targeting with foreground-filtered 3D centroid depth + TF2 map-frame goal localization (Phase 3): detects **all** instances of the target class with YOLOv8, computes a foreground-filtered 3D centroid for each, selects the best one via a configurable policy (`closest` / `highest_confidence` / `largest_bbox`), transforms the chosen point to `/map` via TF2, and sends a Nav2 goal in map coordinates.
 
 **Step 1 — Terminal 1:** Launch the full stack and wait for `Managed nodes are active`:
 ```bash
@@ -129,7 +129,7 @@ ros2 run gazebo_nav_bringup find_and_go --ros-args -p target_object:=person -p u
 
 The robot rotates to scan the room, detects the target with YOLOv8, computes its position in the `/map` frame via TF2, then sends a Nav2 goal. If navigation fails (e.g. goal outside current map bounds), the node automatically returns to searching.
 
-Configurable parameters: `target_object` (default: `person`), `confidence_threshold` (default: `0.5`), `stop_distance` (default: `1.0` m).
+Configurable parameters: `target_object` (default: `person`), `confidence_threshold` (default: `0.5`), `stop_distance` (default: `1.0` m), `selection_policy` (default: `closest`; options: `closest`, `highest_confidence`, `largest_bbox`).
 
 ### Save Map
 ```bash
@@ -226,7 +226,7 @@ main                          # Stable, tagged releases
 
 - [x] **Phase 2 — Point Cloud Centroid for Depth**: Replace the single-pixel depth with a foreground-filtered 3D centroid: every depth pixel inside the YOLO bounding box is back-projected to a camera-frame 3D point, the nearest depth cluster (the foreground object) is isolated by discarding pixels more than 20 % farther than the minimum depth in the region (which strips the background wall), and the median 3D centroid of the remaining points is used as the goal point. Implemented in pure NumPy — no PCL or Open3D dependency — which is sufficient for the clean, noise-free depth data produced by Gazebo. For real-world deployment with physically noisy sensors (Intel RealSense, Azure Kinect), the simple depth-threshold foreground filter could be replaced with PCL's Statistical Outlier Removal (C++) or Open3D's Euclidean clustering (Python) for more robust foreground/background separation.
 
-- [ ] **Phase 3 — Multi-Object Targeting with Selection Logic**: Support detecting multiple objects simultaneously and add a configurable selection policy — closest by depth, highest confidence, or user-specified target class via ROS2 parameter at runtime.
+- [x] **Phase 3 — Multi-Object Targeting with Selection Logic**: Support detecting multiple objects simultaneously and add a configurable selection policy — closest by depth, highest confidence, or user-specified target class via ROS2 parameter at runtime.
 
 - [ ] **Phase 4 — Nav2 Behavior Tree Integration**: Encode the find-and-go behavior as a proper BT with nodes: `SearchForTarget → ComputeTargetPose → NavigateToPose → Recovery`. Makes the behavior maintainable, extensible, and failure-aware at the architecture level.
 

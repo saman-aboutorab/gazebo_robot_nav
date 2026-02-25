@@ -1,29 +1,30 @@
 #!/usr/bin/env python3
 """
-Find-and-Go-To-Object Node  (Phase 2: Point Cloud Centroid for Depth)
+Find-and-Go-To-Object Node  (Phase 3: Multi-Object Targeting)
 
 Rotates the robot to search for a target object using YOLOv8,
-computes a foreground-filtered 3D centroid from the depth image,
-then sends a Nav2 NavigateToPose goal in the /map frame via TF2.
+evaluates ALL detections of the target class in each frame,
+selects the best one via a configurable policy, then sends a
+Nav2 NavigateToPose goal in the /map frame via TF2.
 
-Phase 2 upgrade over Phase 1:
-  Phase 1 used a single depth sample at the bbox centre pixel.
-  Phase 2 back-projects every depth pixel inside the YOLO bbox to a
-  camera-frame 3D point, discards background pixels (anything more
-  than 20 % farther than the nearest depth in the region), and takes
-  the median 3D centroid of the remaining foreground points.
+Phase 3 upgrade over Phase 2:
+  Phase 2 stopped at the first matching detection.  Phase 3 collects
+  every detection of the target class that passes the confidence
+  threshold, computes a foreground-filtered 3D centroid for each, and
+  picks one according to selection_policy:
 
-  This is more accurate because:
-    - The bbox centre pixel is rarely the true object centroid.
-    - Background wall pixels inflate the depth estimate.
-    - Many-pixel median suppresses per-pixel sensor noise.
+    'closest'            — smallest forward depth (cam_x)  [default]
+    'highest_confidence' — highest YOLO confidence score
+    'largest_bbox'       — largest bounding-box pixel area
+                           (usually the closest but more stable
+                           than raw depth for partially occluded
+                           objects)
 
-  Implemented in pure NumPy (no PCL / Open3D).  For real-world noisy
-  sensors the threshold filter could be replaced with PCL Statistical
-  Outlier Removal or Open3D Euclidean clustering.
+  When multiple candidates are found the selection is logged so
+  behaviour is fully observable.
 
-TF pipeline (unchanged from Phase 1):
-  depth + bbox  →  camera_rgb_frame  →  map
+Phase 2 depth pipeline (unchanged):
+  foreground-filtered 3D centroid  →  camera_rgb_frame  →  map
 """
 
 import math
@@ -50,9 +51,18 @@ class FindAndGoNode(Node):
         self.declare_parameter('target_object', 'person')
         self.declare_parameter('confidence_threshold', 0.5)
         self.declare_parameter('stop_distance', 1.0)
+        self.declare_parameter('selection_policy', 'closest')
         self.target = self.get_parameter('target_object').value
         self.conf_threshold = self.get_parameter('confidence_threshold').value
         self.stop_dist = self.get_parameter('stop_distance').value
+        self.policy = self.get_parameter('selection_policy').value
+        valid_policies = ('closest', 'highest_confidence', 'largest_bbox')
+        if self.policy not in valid_policies:
+            self.get_logger().warn(
+                f'Unknown selection_policy "{self.policy}" — falling back to "closest". '
+                f'Valid options: {valid_policies}'
+            )
+            self.policy = 'closest'
 
         self.bridge = CvBridge()
         self.model = YOLO('yolov8n.pt')
@@ -107,29 +117,63 @@ class FindAndGoNode(Node):
         det_msg.header = msg.header
         self.det_pub.publish(det_msg)
 
+        # Collect all detections of the target class that pass the threshold
+        # and have a valid 3-D centroid.  Each entry: (box, conf, centroid).
+        candidates = []
         for box in results[0].boxes:
-            cls_name = self.model.names[int(box.cls)]
+            if self.model.names[int(box.cls)] != self.target:
+                continue
             conf = float(box.conf)
-            if cls_name == self.target and conf >= self.conf_threshold:
-                self.cmd_pub.publish(TwistStamped())   # stop rotating
-                self.state = 'navigating'
-                self.search_timer.cancel()
+            if conf < self.conf_threshold:
+                continue
+            centroid = self.get_3d_centroid_at_bbox(box, cv_image.shape)
+            if centroid is not None:
+                candidates.append((box, conf, centroid))
 
-                centroid = self.get_3d_centroid_at_bbox(box, cv_image.shape)
-                if centroid is None:
-                    self.get_logger().warn('Centroid failed — returning to search')
-                    self.state = 'searching'
-                    self.search_timer = self.create_timer(0.1, self.search_tick)
-                    return
-                cam_x, cam_y, cam_z = centroid
-                dist = math.hypot(cam_x, math.hypot(cam_y, cam_z))
-                self.get_logger().info(
-                    f'Found {cls_name} ({conf:.2f}), '
-                    f'centroid cam ({cam_x:.2f}, {cam_y:.2f}, {cam_z:.2f}) m, '
-                    f'dist {dist:.2f} m'
-                )
-                self.navigate_to_target(cam_x, cam_y, cam_z)
-                return
+        if not candidates:
+            return  # nothing valid this frame — keep searching
+
+        # Apply selection policy to pick the best candidate
+        selected_box, selected_conf, selected_centroid = \
+            self._select_target(candidates)
+
+        n = len(candidates)
+        cam_x, cam_y, cam_z = selected_centroid
+        dist = math.hypot(cam_x, math.hypot(cam_y, cam_z))
+        self.get_logger().info(
+            f'Detected {n} {self.target}(s) — selected by "{self.policy}": '
+            f'conf {selected_conf:.2f}, '
+            f'centroid cam ({cam_x:.2f}, {cam_y:.2f}, {cam_z:.2f}) m, '
+            f'dist {dist:.2f} m'
+        )
+
+        self.cmd_pub.publish(TwistStamped())   # stop rotating
+        self.state = 'navigating'
+        self.search_timer.cancel()
+        self.navigate_to_target(cam_x, cam_y, cam_z)
+
+    # ── Target selection (Phase 3) ────────────────────────────────────────────
+
+    def _select_target(self, candidates):
+        """
+        Pick the best candidate from a list of (box, conf, (cam_x, cam_y, cam_z))
+        tuples according to self.policy.
+
+          'closest'            — smallest cam_x (forward depth)
+          'highest_confidence' — highest YOLO confidence score
+          'largest_bbox'       — largest bounding-box pixel area
+        """
+        if self.policy == 'highest_confidence':
+            return max(candidates, key=lambda c: c[1])
+
+        if self.policy == 'largest_bbox':
+            def _area(c):
+                x1, y1, x2, y2 = c[0].xyxy[0].tolist()
+                return (x2 - x1) * (y2 - y1)
+            return max(candidates, key=_area)
+
+        # default: 'closest'
+        return min(candidates, key=lambda c: c[2][0])  # cam_x = forward depth
 
     # ── Search rotation ───────────────────────────────────────────────────────
 
