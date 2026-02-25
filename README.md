@@ -226,13 +226,15 @@ main                          # Stable, tagged releases
 
 - [x] **Phase 2 — Point Cloud Centroid for Depth**: Replace the single-pixel depth with a foreground-filtered 3D centroid: every depth pixel inside the YOLO bounding box is back-projected to a camera-frame 3D point, the nearest depth cluster (the foreground object) is isolated by discarding pixels more than 20 % farther than the minimum depth in the region (which strips the background wall), and the median 3D centroid of the remaining points is used as the goal point. Implemented in pure NumPy — no PCL or Open3D dependency — which is sufficient for the clean, noise-free depth data produced by Gazebo. For real-world deployment with physically noisy sensors (Intel RealSense, Azure Kinect), the simple depth-threshold foreground filter could be replaced with PCL's Statistical Outlier Removal (C++) or Open3D's Euclidean clustering (Python) for more robust foreground/background separation.
 
-- [ ] **Phase 3 — Recovery Behaviors and Dynamic Obstacles**: Tune Nav2 local costmap inflation for smoother potentials, enable recovery plugins (Spin, BackUp, Wait), and test in dynamic worlds with moving Gazebo actors. Integrate the existing gap-follower as a custom Nav2 controller or behavior tree node.
+- [ ] **Phase 3 — Nav2 Recovery Behaviors**: Enable the built-in Nav2 recovery plugins (Spin, BackUp, Wait) in `nav2_params.yaml` and wire them into the behavior tree. When Nav2 gets stuck — path blocked, costmap artifact, unreachable goal — the robot will automatically attempt recovery before failing. Also tune local costmap inflation radius for smoother potential fields around obstacles.
 
-- [ ] **Phase 4 — Vision Obstacles into Nav2 Costmap**: Feed camera-detected obstacles into the Nav2 costmap — either via depth-to-point-cloud through the obstacle layer, or as semantic keepout polygons for detected classes (e.g. person, fragile object). Extends Phase 3's costmap infrastructure with live camera perception.
+- [ ] **Phase 4 — Dynamic Obstacles with Moving Gazebo Actors**: Replace the static "Standing person" test model with a Gazebo `<actor>` that walks a scripted waypoint path. Verify that the Nav2 local costmap correctly marks and clears the moving obstacle, that the planner replans around it, and that the Phase 3 recovery behaviors (Wait, Spin) trigger correctly when the actor temporarily blocks the robot's path.
 
-- [ ] **Phase 5 — Nav2 Behavior Tree Integration**: Encode the find-and-go behavior as a proper BT with nodes: `SearchForTarget → ComputeTargetPose → NavigateToPose → Recovery`. Makes the behavior maintainable, extensible, and failure-aware at the architecture level.
+- [ ] **Phase 5 — Vision Obstacles into Nav2 Costmap**: Feed camera-detected obstacles into the Nav2 costmap — either via depth-to-point-cloud through the obstacle layer, or as semantic keepout polygons for detected classes (e.g. person, fragile object). Extends Phase 4's costmap infrastructure with live camera perception.
 
-- [ ] **Phase 6 — Multi-Object Targeting with Selection Logic**: Support detecting multiple objects simultaneously and add a configurable selection policy — closest by depth, highest confidence, or user-specified target class via ROS2 parameter at runtime.
+- [ ] **Phase 6 — Nav2 Behavior Tree Integration**: Encode the find-and-go behavior as a proper BT with nodes: `SearchForTarget → ComputeTargetPose → NavigateToPose → Recovery`. Makes the behavior maintainable, extensible, and failure-aware at the architecture level.
+
+- [ ] **Phase 7 — Multi-Object Targeting with Selection Logic**: Support detecting multiple objects simultaneously and add a configurable selection policy — closest by depth, highest confidence, or user-specified target class via ROS2 parameter at runtime.
 
 ## Documentation
 
