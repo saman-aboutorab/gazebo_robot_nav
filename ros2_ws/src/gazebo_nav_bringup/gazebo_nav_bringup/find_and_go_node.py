@@ -180,7 +180,7 @@ class FindAndGoNode(Node):
         #   body Z  = -(v-cy)*d/fy      (up is +Z; downward pixel = -Z)
         cam_point = PointStamped()
         cam_point.header.frame_id = 'camera_rgb_frame'
-        cam_point.header.stamp = self.get_clock().now().to_msg()
+        cam_point.header.stamp = rclpy.time.Time().to_msg()  # time=0 → latest TF
         cam_point.point.x =  depth
         cam_point.point.y = -(u - self.cx) * depth / self.fx
         cam_point.point.z = -(v - self.cy) * depth / self.fy
@@ -256,8 +256,17 @@ class FindAndGoNode(Node):
         goal_handle.get_result_async().add_done_callback(self.goal_result_cb)
 
     def goal_result_cb(self, future):
-        self.get_logger().info('Navigation complete!')
-        self.state = 'done'
+        from action_msgs.msg import GoalStatus
+        status = future.result().status
+        if status == GoalStatus.STATUS_SUCCEEDED:
+            self.get_logger().info('Navigation complete!')
+            self.state = 'done'
+        else:
+            self.get_logger().warn(
+                f'Navigation failed (status {status}) — returning to search'
+            )
+            self.state = 'searching'
+            self.search_timer = self.create_timer(0.1, self.search_tick)
 
 
 def main(args=None):

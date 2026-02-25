@@ -96,16 +96,40 @@ gz service -s /world/default/create \
 
 ### Find and Go to Object
 
-> Requires SLAM + Nav2 running in Terminal 1. Drive around with teleop first to build a map, then run this node.
+Uses TF2 map-frame goal localization (Phase 1): detects object with YOLOv8, back-projects depth into the camera frame, transforms to `/map` via TF2, and sends a Nav2 goal in map coordinates.
 
-**Terminal 2** — Robot searches for a target, then navigates toward it:
+**Step 1 — Terminal 1:** Launch the full stack and wait for `Managed nodes are active`:
 ```bash
-source /opt/ros/jazzy/setup.bash
-source ~/projects/Robotics/gazebo_robot_nav/ros2_ws/install/setup.bash
-ros2 run gazebo_nav_bringup find_and_go --ros-args -p target_object:=person
+cd ~/projects/Robotics/gazebo_robot_nav/ros2_ws
+source install/setup.bash && export TURTLEBOT3_MODEL=waffle
+ros2 launch gazebo_nav_bringup gazebo_slam_nav.launch.py
 ```
 
-The robot rotates to scan the room, detects the target with YOLOv8, then uses Nav2 to navigate toward it. Configurable parameters: `target_object`, `confidence_threshold`, `stop_distance`.
+**Step 2 — Terminal 2:** Drive around until the map covers the area where the target will be (watch RViz — unexplored areas show as gray, mapped free space is white):
+```bash
+source /opt/ros/jazzy/setup.bash && source install/setup.bash
+export TURTLEBOT3_MODEL=waffle
+ros2 run turtlebot3_teleop teleop_keyboard
+```
+
+**Step 3 — Terminal 3:** Spawn a person model in the Gazebo world:
+```bash
+gz service -s /world/default/create \
+  --reqtype gz.msgs.EntityFactory \
+  --reptype gz.msgs.Boolean \
+  --timeout 5000 \
+  --req 'sdf_filename: "https://fuel.gazebosim.org/1.0/OpenRobotics/models/Standing person", pose: {position: {x: 2.5, y: -2.5, z: 0}}'
+```
+
+**Step 4 — Terminal 4:** Run the find-and-go node (`use_sim_time:=true` is required):
+```bash
+source /opt/ros/jazzy/setup.bash && source install/setup.bash
+ros2 run gazebo_nav_bringup find_and_go --ros-args -p target_object:=person -p use_sim_time:=true
+```
+
+The robot rotates to scan the room, detects the target with YOLOv8, computes its position in the `/map` frame via TF2, then sends a Nav2 goal. If navigation fails (e.g. goal outside current map bounds), the node automatically returns to searching.
+
+Configurable parameters: `target_object` (default: `person`), `confidence_threshold` (default: `0.5`), `stop_distance` (default: `1.0` m).
 
 ### Save Map
 ```bash
@@ -198,7 +222,7 @@ main                          # Stable, tagged releases
 
 ### Upcoming Phases
 
-- [ ] **Phase 1 — Map-Frame Goal Localization**: Transform detected object positions into the `/map` frame using TF2 (`depth + bbox → camera_frame → base_link → odom → map`) before sending Nav2 goals. Fixes a fundamental flaw where the current node ignores SLAM localization and relies on drifting odometry instead.
+- [x] **Phase 1 — Map-Frame Goal Localization**: Transform detected object positions into the `/map` frame using TF2 (`depth + bbox → camera_frame → base_link → odom → map`) before sending Nav2 goals. Fixes a fundamental flaw where the current node ignores SLAM localization and relies on drifting odometry instead.
 
 - [ ] **Phase 2 — Point Cloud Centroid for Depth**: Replace the single-pixel depth lookup with a point cloud centroid computed across the full YOLO bounding box region (using PCL or Open3D). Far more robust to sensor noise and bbox edge artifacts; directly improves Phase 1 goal accuracy.
 
