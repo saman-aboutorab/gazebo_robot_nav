@@ -1,16 +1,29 @@
 #!/usr/bin/env python3
 """
-Find-and-Go-To-Object Node  (Phase 1: Map-Frame Goal Localization)
+Find-and-Go-To-Object Node  (Phase 2: Point Cloud Centroid for Depth)
 
 Rotates the robot to search for a target object using YOLOv8,
-reads the depth camera to measure real distance, then computes
-the object's position in the /map frame via TF2 and sends a
-Nav2 NavigateToPose goal.
+computes a foreground-filtered 3D centroid from the depth image,
+then sends a Nav2 NavigateToPose goal in the /map frame via TF2.
 
-Phase 1 fix: goal poses are now derived from the full TF tree
+Phase 2 upgrade over Phase 1:
+  Phase 1 used a single depth sample at the bbox centre pixel.
+  Phase 2 back-projects every depth pixel inside the YOLO bbox to a
+  camera-frame 3D point, discards background pixels (anything more
+  than 20 % farther than the nearest depth in the region), and takes
+  the median 3D centroid of the remaining foreground points.
+
+  This is more accurate because:
+    - The bbox centre pixel is rarely the true object centroid.
+    - Background wall pixels inflate the depth estimate.
+    - Many-pixel median suppresses per-pixel sensor noise.
+
+  Implemented in pure NumPy (no PCL / Open3D).  For real-world noisy
+  sensors the threshold filter could be replaced with PCL Statistical
+  Outlier Removal or Open3D Euclidean clustering.
+
+TF pipeline (unchanged from Phase 1):
   depth + bbox  →  camera_rgb_frame  →  map
-instead of the previous approach of adding depth to raw odometry,
-which accumulated drift from rotations and wheel slip.
 """
 
 import math
@@ -102,11 +115,20 @@ class FindAndGoNode(Node):
                 self.state = 'navigating'
                 self.search_timer.cancel()
 
-                distance = self.get_depth_at_bbox(box, cv_image.shape)
+                centroid = self.get_3d_centroid_at_bbox(box, cv_image.shape)
+                if centroid is None:
+                    self.get_logger().warn('Centroid failed — returning to search')
+                    self.state = 'searching'
+                    self.search_timer = self.create_timer(0.1, self.search_tick)
+                    return
+                cam_x, cam_y, cam_z = centroid
+                dist = math.hypot(cam_x, math.hypot(cam_y, cam_z))
                 self.get_logger().info(
-                    f'Found {cls_name} ({conf:.2f}) at {distance:.2f} m'
+                    f'Found {cls_name} ({conf:.2f}), '
+                    f'centroid cam ({cam_x:.2f}, {cam_y:.2f}, {cam_z:.2f}) m, '
+                    f'dist {dist:.2f} m'
                 )
-                self.navigate_to_target(box, distance)
+                self.navigate_to_target(cam_x, cam_y, cam_z)
                 return
 
     # ── Search rotation ───────────────────────────────────────────────────────
@@ -119,71 +141,100 @@ class FindAndGoNode(Node):
         msg.twist.angular.z = 0.3
         self.cmd_pub.publish(msg)
 
-    # ── Depth measurement ─────────────────────────────────────────────────────
+    # ── 3-D centroid measurement (Phase 2) ───────────────────────────────────
 
-    def get_depth_at_bbox(self, box, image_shape):
-        """Return median depth (metres) from the centre region of the bbox."""
+    def get_3d_centroid_at_bbox(self, box, image_shape):
+        """
+        Back-project every depth pixel inside the YOLO bbox to a 3-D point
+        in camera_rgb_frame, isolate the foreground cluster (nearest depth ±20 %),
+        and return the median 3-D centroid (cam_x, cam_y, cam_z) in metres.
+
+        Returns None if there are not enough valid foreground pixels.
+
+        Coordinate convention (ROS body frame, same as navigate_to_target):
+          cam_x  = forward  (depth Z_optical)
+          cam_y  = left     (-X_optical)
+          cam_z  = up       (-Y_optical)
+        """
         if self.latest_depth is None:
-            self.get_logger().warn('No depth data yet — using fallback 3.0 m')
-            return 3.0
+            self.get_logger().warn('No depth data yet — cannot compute centroid')
+            return None
 
         x1, y1, x2, y2 = box.xyxy[0].tolist()
 
-        # Depth image may differ in resolution from RGB (320x240 vs 640x480)
+        # Pixel grid over the bbox in RGB image space
         rgb_h, rgb_w = image_shape[:2]
         depth_h, depth_w = self.latest_depth.shape[:2]
         sx, sy = depth_w / rgb_w, depth_h / rgb_h
 
-        dx1, dy1 = int(x1 * sx), int(y1 * sy)
-        dx2, dy2 = int(x2 * sx), int(y2 * sy)
+        cols = np.arange(int(x1), int(x2) + 1, dtype=np.float32)
+        rows = np.arange(int(y1), int(y2) + 1, dtype=np.float32)
+        uu, vv = np.meshgrid(cols, rows)          # RGB pixel coords, shape (H, W)
 
-        # Centre 50 % of the bbox to avoid edge noise
-        cx = (dx1 + dx2) // 2
-        cy = (dy1 + dy2) // 2
-        hw = max((dx2 - dx1) // 4, 1)
-        hh = max((dy2 - dy1) // 4, 1)
-        roi = self.latest_depth[cy - hh:cy + hh, cx - hw:cx + hw]
+        # Look up depth for each RGB pixel (scale to depth image resolution)
+        uu_d = np.clip((uu * sx).astype(int), 0, depth_w - 1)
+        vv_d = np.clip((vv * sy).astype(int), 0, depth_h - 1)
+        d_arr = self.latest_depth[vv_d, uu_d]     # shape (H, W)
 
-        valid = roi[(roi > 0.1) & (roi < 10.0) & np.isfinite(roi)]
-        if len(valid) == 0:
-            self.get_logger().warn('No valid depth in bbox — using fallback 3.0 m')
-            return 3.0
+        # Valid range mask
+        valid = (d_arr > 0.1) & (d_arr < 10.0) & np.isfinite(d_arr)
+        if not valid.any():
+            self.get_logger().warn('No valid depth in bbox — cannot compute centroid')
+            return None
 
-        median = float(np.median(valid))
+        d_v = d_arr[valid]
+        uu_v = uu[valid]
+        vv_v = vv[valid]
+
+        # Foreground filter: keep only the nearest depth cluster (object, not wall).
+        # Pixels more than 20 % farther than the minimum are treated as background.
+        min_d = d_v.min()
+        fg = d_v < min_d * 1.2
+        d_fg = d_v[fg]
+        uu_fg = uu_v[fg]
+        vv_fg = vv_v[fg]
+
+        if len(d_fg) < 5:
+            self.get_logger().warn(
+                f'Only {len(d_fg)} foreground pixels — cannot compute centroid'
+            )
+            return None
+
+        # Back-project to camera_rgb_frame (ROS body convention)
+        #   cam_x = depth (forward)
+        #   cam_y = -(u - cx) * d / fx   (left is +Y)
+        #   cam_z = -(v - cy) * d / fy   (up is +Z)
+        X = d_fg
+        Y = -(uu_fg - self.cx) * d_fg / self.fx
+        Z = -(vv_fg - self.cy) * d_fg / self.fy
+
+        cam_x = float(np.median(X))
+        cam_y = float(np.median(Y))
+        cam_z = float(np.median(Z))
+
         self.get_logger().info(
-            f'Depth: {median:.2f} m ({len(valid)} valid pixels)'
+            f'3-D centroid: ({cam_x:.2f}, {cam_y:.2f}, {cam_z:.2f}) m '
+            f'({len(d_fg)} foreground px / {valid.sum()} valid px)'
         )
-        return median
+        return cam_x, cam_y, cam_z
 
-    # ── Map-frame goal (Phase 1) ──────────────────────────────────────────────
+    # ── Map-frame goal (Phase 2) ──────────────────────────────────────────────
 
-    def navigate_to_target(self, box, depth):
+    def navigate_to_target(self, cam_x, cam_y, cam_z):
         """
-        Convert the detected bbox + depth into a /map-frame Nav2 goal.
+        Send a Nav2 goal from a 3-D point already expressed in camera_rgb_frame.
 
-        Pipeline:
-          pixel (u, v) + depth  →  3-D point in camera_rgb_frame
-                                 →  tf_buffer.transform() to /map
-                                 →  stop_distance short of the object
-                                 →  NavigateToPose action
+        Pipeline (Phase 2):
+          3-D centroid in camera_rgb_frame  →  tf_buffer.transform() to /map
+                                            →  stop_distance short of the object
+                                            →  NavigateToPose action
         """
-        # Bbox centre in image pixels
-        x1, y1, x2, y2 = box.xyxy[0].tolist()
-        u = (x1 + x2) / 2.0
-        v = (y1 + y2) / 2.0
-
-        # Back-project to 3-D using the pinhole model.
-        # camera_rgb_frame uses the ROS body convention (X fwd, Y left, Z up)
-        # so we map optical axes (Z fwd, X right, Y down) accordingly:
-        #   body X  = depth              (forward)
-        #   body Y  = -(u-cx)*d/fx      (left is +Y; rightward pixel = -Y)
-        #   body Z  = -(v-cy)*d/fy      (up is +Z; downward pixel = -Z)
         cam_point = PointStamped()
         cam_point.header.frame_id = 'camera_rgb_frame'
         cam_point.header.stamp = rclpy.time.Time().to_msg()  # time=0 → latest TF
-        cam_point.point.x =  depth
-        cam_point.point.y = -(u - self.cx) * depth / self.fx
-        cam_point.point.z = -(v - self.cy) * depth / self.fy
+        cam_point.point.x = cam_x
+        cam_point.point.y = cam_y
+        cam_point.point.z = cam_z
 
         # Transform object position from camera frame → map frame
         try:

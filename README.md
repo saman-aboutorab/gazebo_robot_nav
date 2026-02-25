@@ -96,7 +96,7 @@ gz service -s /world/default/create \
 
 ### Find and Go to Object
 
-Uses TF2 map-frame goal localization (Phase 1): detects object with YOLOv8, back-projects depth into the camera frame, transforms to `/map` via TF2, and sends a Nav2 goal in map coordinates.
+Uses foreground-filtered 3D centroid depth + TF2 map-frame goal localization (Phase 2): detects object with YOLOv8, back-projects all depth pixels in the bounding box to camera-frame 3D points, isolates the nearest depth cluster (foreground object, not background wall), computes the 3D centroid, transforms to `/map` via TF2, and sends a Nav2 goal in map coordinates.
 
 **Step 1 — Terminal 1:** Launch the full stack and wait for `Managed nodes are active`:
 ```bash
@@ -224,7 +224,7 @@ main                          # Stable, tagged releases
 
 - [x] **Phase 1 — Map-Frame Goal Localization**: Transform detected object positions into the `/map` frame using TF2 (`depth + bbox → camera_frame → base_link → odom → map`) before sending Nav2 goals. Fixes a fundamental flaw where the current node ignores SLAM localization and relies on drifting odometry instead.
 
-- [ ] **Phase 2 — Point Cloud Centroid for Depth**: Replace the single-pixel depth lookup with a point cloud centroid computed across the full YOLO bounding box region (using PCL or Open3D). Far more robust to sensor noise and bbox edge artifacts; directly improves Phase 1 goal accuracy.
+- [x] **Phase 2 — Point Cloud Centroid for Depth**: Replace the single-pixel depth with a foreground-filtered 3D centroid: every depth pixel inside the YOLO bounding box is back-projected to a camera-frame 3D point, the nearest depth cluster (the foreground object) is isolated by discarding pixels more than 20 % farther than the minimum depth in the region (which strips the background wall), and the median 3D centroid of the remaining points is used as the goal point. Implemented in pure NumPy — no PCL or Open3D dependency — which is sufficient for the clean, noise-free depth data produced by Gazebo. For real-world deployment with physically noisy sensors (Intel RealSense, Azure Kinect), the simple depth-threshold foreground filter could be replaced with PCL's Statistical Outlier Removal (C++) or Open3D's Euclidean clustering (Python) for more robust foreground/background separation.
 
 - [ ] **Phase 3 — Recovery Behaviors and Dynamic Obstacles**: Tune Nav2 local costmap inflation for smoother potentials, enable recovery plugins (Spin, BackUp, Wait), and test in dynamic worlds with moving Gazebo actors. Integrate the existing gap-follower as a custom Nav2 controller or behavior tree node.
 
