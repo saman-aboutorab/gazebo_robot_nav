@@ -131,6 +131,39 @@ The robot rotates to scan the room, detects the target with YOLOv8, computes its
 
 Configurable parameters: `target_object` (default: `person`), `confidence_threshold` (default: `0.5`), `stop_distance` (default: `1.0` m), `selection_policy` (default: `closest`; options: `closest`, `highest_confidence`, `largest_bbox`).
 
+### Vision Obstacles in Nav2 Costmap (Phase 4)
+
+The `vision_obstacle_node` runs automatically as part of the full stack launch — no extra terminal needed. It subscribes to the RGB camera and depth camera, runs YOLOv8 on each frame, back-projects detected bounding boxes to 3D points in `camera_rgb_frame`, and publishes them as a `PointCloud2` on `/vision_obstacles`. Nav2's local costmap obstacle layer consumes this stream and marks the detected objects as obstacles in real time.
+
+**Step 1 — Terminal 1:** Launch the full stack (vision_obstacle_node starts automatically):
+```bash
+cd ~/projects/Robotics/gazebo_robot_nav/ros2_ws
+source install/setup.bash && export TURTLEBOT3_MODEL=waffle
+ros2 launch gazebo_nav_bringup gazebo_slam_nav.launch.py
+```
+
+**Step 2 — Spawn a person** at least 1 m in front of the robot:
+```bash
+gz service -s /world/default/create \
+  --reqtype gz.msgs.EntityFactory \
+  --reptype gz.msgs.Boolean \
+  --timeout 5000 \
+  --req 'sdf_filename: "https://fuel.gazebosim.org/1.0/OpenRobotics/models/Standing person", pose: {position: {x: 0.0, y: -0.5, z: 0}}'
+```
+
+**Step 3 — Verify in RViz:**
+- `Add → By topic → /vision_obstacles → PointCloud2` — a 3D point cloud of the person's body should appear
+- `Add → By topic → /local_costmap/costmap → Map` (Color Scheme: `costmap`) — a dark obstacle cell + purple inflation ring should appear at the person's feet
+
+**To remove a spawned model:**
+```bash
+gz service -s /world/default/remove \
+  --reqtype gz.msgs.Entity \
+  --reptype gz.msgs.Boolean \
+  --timeout 5000 \
+  --req 'name: "Standing person" type: 2'
+```
+
 ### Save Map
 ```bash
 cd ~/projects/Robotics/gazebo_robot_nav
@@ -228,7 +261,7 @@ main                          # Stable, tagged releases
 
 - [x] **Phase 3 — Multi-Object Targeting with Selection Logic**: Support detecting multiple objects simultaneously and add a configurable selection policy — closest by depth, highest confidence, or user-specified target class via ROS2 parameter at runtime.
 
-- [ ] **Phase 4 — Vision Obstacles into Nav2 Costmap**: Run a background Python node that back-projects camera-detected obstacles (YOLO bounding boxes + depth) into the Nav2 local costmap as a `PointCloud2` stream consumed by the costmap's obstacle layer. The planner and local controller will then treat visually-detected objects (e.g. a person) as real obstacles and plan around them — even before the LiDAR sees them. Implemented as a standalone Python node that runs alongside the navigation stack; no changes to `find_and_go_node.py` required.
+- [x] **Phase 4 — Vision Obstacles into Nav2 Costmap**: Run a background Python node that back-projects camera-detected obstacles (YOLO bounding boxes + depth) into the Nav2 local costmap as a `PointCloud2` stream consumed by the costmap's obstacle layer. The planner and local controller will then treat visually-detected objects (e.g. a person) as real obstacles and plan around them — even before the LiDAR sees them. Implemented as a standalone Python node that runs alongside the navigation stack; no changes to `find_and_go_node.py` required.
 
 - [ ] **Phase 5 — Behavior Tree Integration with py_trees_ros**: Replace the monolithic callback-based state machine in `find_and_go_node.py` with a proper Behavior Tree using the `py_trees` / `py_trees_ros` Python libraries (the standard Python-native BT framework for ROS2; Nav2's own BT executor uses BehaviorTree.CPP which requires C++ plugins). The tree structure is:
   ```

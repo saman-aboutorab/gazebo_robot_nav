@@ -233,6 +233,17 @@ def generate_launch_description():
         }],
     )
 
+    # ── Vision obstacle node (Phase 4) ───────────────────────────────────────
+    # Publishes YOLO-detected obstacles as PointCloud2 → /vision_obstacles
+    # consumed by the local costmap obstacle_layer for early obstacle awareness.
+    vision_obstacle_node = Node(
+        package='gazebo_nav_bringup',
+        executable='vision_obstacles',
+        name='vision_obstacle_node',
+        output='screen',
+        parameters=[{'use_sim_time': use_sim_time}],
+    )
+
     # ── RViz2 ────────────────────────────────────────────────────────────────
     rviz_node = Node(
         package='rviz2',
@@ -263,5 +274,6 @@ def generate_launch_description():
     ld.add_action(velocity_smoother)
     ld.add_action(collision_monitor)
     ld.add_action(lifecycle_manager)
+    ld.add_action(vision_obstacle_node)
     ld.add_action(rviz_node)
     return ld

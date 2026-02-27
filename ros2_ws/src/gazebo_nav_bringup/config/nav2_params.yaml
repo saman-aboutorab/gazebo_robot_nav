@@ -164,13 +164,24 @@ local_costmap:
 
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
-        observation_sources: scan
+        observation_sources: scan vision_obstacles
         scan:
           topic: /scan
           max_obstacle_height: 2.0
           clearing: true
           marking: true
           data_type: "LaserScan"
+        vision_obstacles:
+          topic: /vision_obstacles
+          max_obstacle_height: 2.0
+          clearing: false
+          marking: true
+          data_type: "PointCloud2"
+          obstacle_max_range: 3.5
+          obstacle_min_range: 0.1
+          raytrace_max_range: 5.0
+          raytrace_min_range: 0.0
+          inf_is_valid: false
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
