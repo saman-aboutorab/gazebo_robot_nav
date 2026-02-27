@@ -13,6 +13,8 @@ This project implements a complete autonomous mobile robot navigation system usi
 - Camera sensor with image bridging (640x480, ~5 Hz)
 - YOLOv8 object detection with annotated image output
 - Depth camera with real distance measurement
+- Vision-based "find and go to object" with Behavior Tree orchestration (py_trees)
+- Vision obstacles fed into Nav2 local costmap in real time
 - Single-command launch orchestrating 15+ ROS2 nodes
 
 ## Tech Stack
@@ -23,6 +25,7 @@ This project implements a complete autonomous mobile robot navigation system usi
 - **SLAM:** SLAM Toolbox (Ceres solver, loop closure)
 - **Navigation:** Nav2 (BT Navigator, RegulatedPurePursuit controller, Navfn planner)
 - **Vision:** YOLOv8 (Ultralytics), OpenCV, cv_bridge
+- **Behavior Tree:** py_trees / py_trees_ros (Python-native BT framework)
 - **Language:** Python 3
 
 ## Quick Start
@@ -87,16 +90,15 @@ ros2 run gazebo_nav_bringup vision_detector
 
 **Spawn a person model** (gives the detector something to find):
 ```bash
-gz service -s /world/default/create \
-  --reqtype gz.msgs.EntityFactory \
-  --reptype gz.msgs.Boolean \
-  --timeout 5000 \
-  --req 'sdf_filename: "https://fuel.gazebosim.org/1.0/OpenRobotics/models/Standing person", pose: {position: {x: 2.5, y: -2.5, z: 0}}'
+ros2 run ros_gz_sim create \
+  -name person \
+  -file "$HOME/.gz/fuel/fuel.gazebosim.org/openrobotics/models/standing person/3/model.sdf" \
+  -x 2.5 -y -2.5 -z 0.0
 ```
 
 ### Find and Go to Object
 
-Uses multi-object targeting with foreground-filtered 3D centroid depth + TF2 map-frame goal localization (Phase 3): detects **all** instances of the target class with YOLOv8, computes a foreground-filtered 3D centroid for each, selects the best one via a configurable policy (`closest` / `highest_confidence` / `largest_bbox`), transforms the chosen point to `/map` via TF2, and sends a Nav2 goal in map coordinates.
+Uses a **py_trees Behavior Tree** (Phase 5) to orchestrate search, localization, and navigation: the robot rotates to find a target with YOLOv8, back-projects the detection to a 3D centroid via the depth camera, transforms it to the `/map` frame with TF2, and drives to it with Nav2. Any failure (TF2 error, Nav2 abort) automatically re-triggers the search. Configurable multi-object selection policy: `closest` / `highest_confidence` / `largest_bbox`.
 
 **Step 1 — Terminal 1:** Launch the full stack and wait for `Managed nodes are active`:
 ```bash
@@ -114,22 +116,23 @@ ros2 run turtlebot3_teleop teleop_keyboard
 
 **Step 3 — Terminal 3:** Spawn a person model in the Gazebo world:
 ```bash
-gz service -s /world/default/create \
-  --reqtype gz.msgs.EntityFactory \
-  --reptype gz.msgs.Boolean \
-  --timeout 5000 \
-  --req 'sdf_filename: "https://fuel.gazebosim.org/1.0/OpenRobotics/models/Standing person", pose: {position: {x: 2.5, y: -2.5, z: 0}}'
+ros2 run ros_gz_sim create \
+  -name person \
+  -file "$HOME/.gz/fuel/fuel.gazebosim.org/openrobotics/models/standing person/3/model.sdf" \
+  -x 1.0 -y 1.5 -z 0.0
 ```
 
-**Step 4 — Terminal 4:** Run the find-and-go node (`use_sim_time:=true` is required):
+> First-time setup: run `gz fuel download --url "https://fuel.gazebosim.org/1.0/OpenRobotics/models/Standing%20person"` to cache the model locally.
+
+**Step 4 — Terminal 4:** Run the find-and-go node:
 ```bash
 source /opt/ros/jazzy/setup.bash && source install/setup.bash
-ros2 run gazebo_nav_bringup find_and_go --ros-args -p target_object:=person -p use_sim_time:=true
+ros2 run gazebo_nav_bringup find_and_go
 ```
 
-The robot rotates to scan the room, detects the target with YOLOv8, computes its position in the `/map` frame via TF2, then sends a Nav2 goal. If navigation fails (e.g. goal outside current map bounds), the node automatically returns to searching.
+The BT ticks at 10 Hz: `SearchForTarget` rotates until YOLO detects the target → `ComputeTargetPose` transforms the 3D centroid to `/map` and computes a Nav2 goal → `NavigateToGoal` drives the robot there. Any failure automatically re-triggers the search from the beginning.
 
-Configurable parameters: `target_object` (default: `person`), `confidence_threshold` (default: `0.5`), `stop_distance` (default: `1.0` m), `selection_policy` (default: `closest`; options: `closest`, `highest_confidence`, `largest_bbox`).
+Configurable parameters: `target_object` (default: `person`), `confidence_threshold` (default: `0.5`), `stop_distance` (default: `1.5` m), `selection_policy` (default: `closest`; options: `closest`, `highest_confidence`, `largest_bbox`).
 
 ### Vision Obstacles in Nav2 Costmap (Phase 4)
 
@@ -144,11 +147,10 @@ ros2 launch gazebo_nav_bringup gazebo_slam_nav.launch.py
 
 **Step 2 — Spawn a person** at least 1 m in front of the robot:
 ```bash
-gz service -s /world/default/create \
-  --reqtype gz.msgs.EntityFactory \
-  --reptype gz.msgs.Boolean \
-  --timeout 5000 \
-  --req 'sdf_filename: "https://fuel.gazebosim.org/1.0/OpenRobotics/models/Standing person", pose: {position: {x: 0.0, y: -0.5, z: 0}}'
+ros2 run ros_gz_sim create \
+  -name person \
+  -file "$HOME/.gz/fuel/fuel.gazebosim.org/openrobotics/models/standing person/3/model.sdf" \
+  -x 0.0 -y -0.5 -z 0.0
 ```
 
 **Step 3 — Verify in RViz:**
@@ -157,11 +159,7 @@ gz service -s /world/default/create \
 
 **To remove a spawned model:**
 ```bash
-gz service -s /world/default/remove \
-  --reqtype gz.msgs.Entity \
-  --reptype gz.msgs.Boolean \
-  --timeout 5000 \
-  --req 'name: "Standing person" type: 2'
+gz model --world default -m person --delete
 ```
 
 ### Save Map
@@ -188,7 +186,9 @@ gazebo_robot_nav/
 │   │   │   └── gazebo_slam_nav.launch.py # SLAM + Nav2 + camera
 │   │   ├── gazebo_nav_bringup/
 │   │   │   ├── vision_detector_node.py  # YOLOv8 detection node
-│   │   │   └── find_and_go_node.py     # Vision search + Nav2 goal node
+│   │   │   ├── vision_obstacle_node.py  # YOLO → PointCloud2 for Nav2 costmap
+│   │   │   ├── bt_leaves.py            # BT leaf nodes (SearchForTarget, ComputeTargetPose, NavigateToGoal)
+│   │   │   └── find_and_go_node.py     # BT orchestrator + shared ROS2 infrastructure
 │   │   ├── models/
 │   │   │   └── turtlebot3_waffle/       # Local model (RGB 640x480 + depth 320x240)
 │   │   ├── config/
@@ -263,15 +263,15 @@ main                          # Stable, tagged releases
 
 - [x] **Phase 4 — Vision Obstacles into Nav2 Costmap**: Run a background Python node that back-projects camera-detected obstacles (YOLO bounding boxes + depth) into the Nav2 local costmap as a `PointCloud2` stream consumed by the costmap's obstacle layer. The planner and local controller will then treat visually-detected objects (e.g. a person) as real obstacles and plan around them — even before the LiDAR sees them. Implemented as a standalone Python node that runs alongside the navigation stack; no changes to `find_and_go_node.py` required.
 
-- [ ] **Phase 5 — Behavior Tree Integration with py_trees_ros**: Replace the monolithic callback-based state machine in `find_and_go_node.py` with a proper Behavior Tree using the `py_trees` / `py_trees_ros` Python libraries (the standard Python-native BT framework for ROS2; Nav2's own BT executor uses BehaviorTree.CPP which requires C++ plugins). The tree structure is:
+- [x] **Phase 5 — Behavior Tree Integration with py_trees_ros**: Replace the monolithic callback-based state machine in `find_and_go_node.py` with a proper Behavior Tree using the `py_trees` / `py_trees_ros` Python libraries (the standard Python-native BT framework for ROS2; Nav2's own BT executor uses BehaviorTree.CPP which requires C++ plugins). The tree structure is:
   ```
   Retry(num_failures=∞)
-   └── Sequence
+   └── Sequence(memory=True)
          ├── SearchForTarget    — rotates, runs YOLO + multi-object selection, writes 3D centroid to blackboard
          ├── ComputeTargetPose  — reads centroid, TF2 → map frame, writes Nav2 goal to blackboard
          └── NavigateToGoal     — sends Nav2 NavigateToPose action, polls result (RUNNING → SUCCESS/FAILURE)
   ```
-  Each leaf node is a Python class with `initialise() / update() / terminate()` methods returning `SUCCESS`, `FAILURE`, or `RUNNING` each tick. Nodes communicate via the **blackboard** (shared key-value store) rather than direct calls. Any `FAILURE` propagates up the `Sequence` and is caught by `Retry`, which automatically re-ticks from `SearchForTarget` — eliminating all the scattered `self.state = 'searching'` reset logic. Done after Phase 4 so the BT is designed with the vision-aware costmap already in place.
+  Each leaf node is a Python class with `initialise() / update() / terminate()` methods returning `SUCCESS`, `FAILURE`, or `RUNNING` each tick. Nodes communicate via the **blackboard** (shared key-value store) rather than direct calls. Any `FAILURE` propagates up the `Sequence` and is caught by `Retry`, which automatically re-ticks from `SearchForTarget` — eliminating all the scattered `self.state = 'searching'` reset logic. `memory=True` on the Sequence means NavigateToGoal runs to completion without re-ticking SearchForTarget (preventing spurious rotation commands fighting Nav2). Leaf nodes are in `bt_leaves.py`; `find_and_go_node.py` becomes a thin ROS2 node that owns shared infrastructure (YOLO, TF2, Nav2 action client) and ticks the tree at 10 Hz via a ROS2 timer. Nav2 tuned: explicit progress checker (30 s allowance), lookahead distance 1.0 m, min approach velocity 0.2 m/s for smooth path following.
 
 - [ ] **Phase 6 — Dynamic Obstacles with Moving Gazebo Actors**: Replace the static "Standing person" test model with a Gazebo `<actor>` that walks a scripted waypoint path. Verify that the Nav2 local costmap correctly marks and clears the moving obstacle, that the planner replans around it, and that the Phase 7 recovery behaviors (Wait, Spin) trigger correctly when the actor temporarily blocks the robot's path.
 

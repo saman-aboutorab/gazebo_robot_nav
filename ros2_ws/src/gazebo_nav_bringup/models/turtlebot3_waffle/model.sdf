@@ -490,7 +490,9 @@
     <joint name="camera_rgb_joint" type="fixed">
       <parent>camera_link</parent>
       <child>camera_rgb_frame</child>
-      <pose>0.005 0.018 0.013 0 0 0</pose>
+      <!-- pitch = -0.15 rad ≈ 8.6° upward tilt so the camera sees more of a
+           standing person's torso/face when the robot is at close range -->
+      <pose>0.005 0.018 0.013 0 -0.15 0</pose>
       <axis>
         <xyz>0 0 1</xyz>
       </axis>
