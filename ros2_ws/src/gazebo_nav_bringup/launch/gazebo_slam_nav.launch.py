@@ -139,6 +139,11 @@ def generate_launch_description():
     #   → collision_monitor (reads cmd_vel_smoothed, publishes cmd_vel)
     #   → Turtlebot3 bridge (reads cmd_vel) → robot
 
+    # Subscribes: /plan (Path), /odom (Odometry), /tf
+    # Publishes:  cmd_vel_nav (TwistStamped) — raw velocity command to follow the path
+    # Algorithm:  RegulatedPurePursuit — looks ahead on /plan and steers toward it
+    # Note: 'cmd_vel' remapped to 'cmd_vel_nav' to avoid writing directly to the robot;
+    #       velocity_smoother sits downstream before the command reaches the robot.
     controller_server = Node(
         package='nav2_controller',
         executable='controller_server',
@@ -148,6 +153,10 @@ def generate_launch_description():
         remappings=remappings + [('cmd_vel', 'cmd_vel_nav')],
     )
 
+    # Subscribes: /plan (Path)
+    # Publishes:  /plan (Path) — a smoothed version of the global plan
+    # Purpose:    Optional post-processing step that smooths sharp corners in the
+    #             raw A* path before the controller tries to follow it.
     smoother_server = Node(
         package='nav2_smoother',
         executable='smoother_server',
@@ -157,6 +166,9 @@ def generate_launch_description():
         remappings=remappings,
     )
 
+    # Subscribes: /map (OccupancyGrid), /tf, goal pose (via bt_navigator)
+    # Publishes:  /plan (Path) — global waypoint list from current pose to goal
+    # Algorithm:  Navfn (A* on the occupancy grid map)
     planner_server = Node(
         package='nav2_planner',
         executable='planner_server',
@@ -166,6 +178,11 @@ def generate_launch_description():
         remappings=remappings,
     )
 
+    # Subscribes: /tf, costmaps
+    # Publishes:  cmd_vel_nav (TwistStamped) — used by recovery behaviors (spin, backup)
+    # Purpose:    Runs built-in recovery behaviors (Spin, BackUp, Wait) when the robot
+    #             gets stuck. bt_navigator triggers these via the BT on failure.
+    # Note: 'cmd_vel' remapped to 'cmd_vel_nav' same as controller_server.
     behavior_server = Node(
         package='nav2_behaviors',
         executable='behavior_server',
@@ -175,6 +192,12 @@ def generate_launch_description():
         remappings=remappings + [('cmd_vel', 'cmd_vel_nav')],
     )
 
+    # Subscribes: navigate_to_pose ACTION goal (NavigateToPose) from find_and_go_node
+    #             /tf, /map, feedback from planner_server and controller_server
+    # Publishes:  navigate_to_pose ACTION feedback + result
+    # Purpose:    Orchestrator — runs Nav2's internal Behavior Tree to coordinate
+    #             planner_server, controller_server, and behavior_server until the
+    #             robot reaches the goal or a recovery is needed.
     bt_navigator = Node(
         package='nav2_bt_navigator',
         executable='bt_navigator',
@@ -184,6 +207,10 @@ def generate_launch_description():
         remappings=remappings,
     )
 
+    # Subscribes: list of waypoints (via FollowWaypoints action)
+    # Publishes:  navigate_to_pose ACTION goals — one per waypoint in sequence
+    # Purpose:    High-level multi-waypoint missions; sends each waypoint to
+    #             bt_navigator one at a time. Not used in find_and_go mode.
     waypoint_follower = Node(
         package='nav2_waypoint_follower',
         executable='waypoint_follower',
@@ -193,6 +220,12 @@ def generate_launch_description():
         remappings=remappings,
     )
 
+    # Subscribes: cmd_vel_nav (TwistStamped) — raw command from controller_server
+    # Publishes:  cmd_vel_smoothed (TwistStamped) — acceleration-limited command
+    # Purpose:    Prevents jerky motion by ramping velocity up/down within configured
+    #             max acceleration limits. collision_monitor sits downstream.
+    # Note: 'cmd_vel' remapped to 'cmd_vel_nav' so it reads from controller output,
+    #       not the final /cmd_vel topic.
     velocity_smoother = Node(
         package='nav2_velocity_smoother',
         executable='velocity_smoother',
@@ -202,6 +235,11 @@ def generate_launch_description():
         remappings=remappings + [('cmd_vel', 'cmd_vel_nav')],
     )
 
+    # Subscribes: cmd_vel_smoothed (TwistStamped), /scan (LaserScan)
+    # Publishes:  /cmd_vel (TwistStamped) — the final command sent to the robot wheels
+    # Purpose:    Safety layer — if LiDAR detects an obstacle within a configured
+    #             polygon, it scales down or zeroes the velocity before it reaches
+    #             the robot. Last node in the cmd_vel chain.
     collision_monitor = Node(
         package='nav2_collision_monitor',
         executable='collision_monitor',
